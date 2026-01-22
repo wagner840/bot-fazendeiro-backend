@@ -3,7 +3,7 @@ Bot Multi-Empresa Downtown - Funções de Banco de Dados
 Todas as funções que interagem com o Supabase.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List, Dict
 from config import supabase, empresas_cache, servidores_cache
 
@@ -522,7 +522,7 @@ async def get_transacoes_empresa(empresa_id: int, limit: int = 50) -> List[Dict]
         response = supabase.table('transacoes').select(
             '*, funcionarios(nome)'
         ).eq('empresa_id', empresa_id).order(
-            'created_at', desc=True
+            'data_criacao', desc=True
         ).limit(limit).execute()
         return response.data or []
     except Exception as e:
@@ -575,7 +575,7 @@ async def get_encomendas_pendentes(empresa_id: int) -> List[Dict]:
     try:
         response = supabase.table('encomendas').select('*').eq(
             'empresa_id', empresa_id
-        ).eq('status', 'pendente').order('created_at').execute()
+        ).eq('status', 'pendente').order('data_criacao').execute()
         return response.data or []
     except Exception as e:
         print(f"Erro ao buscar encomendas: {e}")
@@ -640,3 +640,156 @@ async def atualizar_modo_pagamento(empresa_id: int, modo: str) -> bool:
     except Exception as e:
         print(f"Erro ao atualizar modo de pagamento: {e}")
         return False
+
+
+# ============================================
+# FUNÇÕES DE ASSINATURA E PAGAMENTO
+# ============================================
+
+async def verificar_assinatura_servidor(guild_id: str) -> dict:
+    """Verifica se servidor tem assinatura ativa."""
+    try:
+        response = supabase.rpc('verificar_assinatura', {'p_guild_id': guild_id}).execute()
+        
+        if response.data and len(response.data) > 0:
+            return response.data[0]
+        
+        # Retorna assinatura inativa se não encontrar
+        return {
+            'ativa': False,
+            'status': None,
+            'dias_restantes': 0,
+            'data_expiracao': None,
+            'plano_nome': None
+        }
+    except Exception as e:
+        print(f"Erro ao verificar assinatura: {e}")
+        return {'ativa': False, 'status': 'erro', 'dias_restantes': 0}
+
+
+async def get_assinatura_servidor(guild_id: str) -> Optional[Dict]:
+    """Obtém dados completos da assinatura do servidor."""
+    try:
+        response = supabase.table('assinaturas').select(
+            '*, planos(*)'
+        ).eq('guild_id', guild_id).execute()
+        
+        if response.data:
+            return response.data[0]
+        return None
+    except Exception as e:
+        print(f"Erro ao buscar assinatura: {e}")
+        return None
+
+
+async def get_planos_disponiveis() -> List[Dict]:
+    """Obtém todos os planos disponíveis."""
+    try:
+        response = supabase.table('planos').select('*').eq('ativo', True).order('preco').execute()
+        return response.data or []
+    except Exception as e:
+        print(f"Erro ao buscar planos: {e}")
+        return []
+
+
+async def criar_pagamento_pix(guild_id: str, plano_id: int, valor: float) -> Optional[Dict]:
+    """Cria um registro de pagamento PIX pendente."""
+    try:
+        response = supabase.table('pagamentos_pix').insert({
+            'guild_id': guild_id,
+            'plano_id': plano_id,
+            'valor': valor,
+            'status': 'pendente',
+            'pix_expiracao': (datetime.utcnow().replace(tzinfo=None) + timedelta(minutes=15)).isoformat()
+        }).execute()
+        
+        if response.data:
+            return response.data[0]
+        return None
+    except Exception as e:
+        print(f"Erro ao criar pagamento PIX: {e}")
+        return None
+
+
+async def ativar_assinatura_servidor(guild_id: str, plano_id: int, pagador_discord_id: str = None) -> bool:
+    """Ativa assinatura do servidor após pagamento confirmado."""
+    try:
+        response = supabase.rpc('ativar_assinatura', {
+            'p_guild_id': guild_id,
+            'p_plano_id': plano_id,
+            'p_pagador_discord_id': pagador_discord_id
+        }).execute()
+        
+        return response.data == True
+    except Exception as e:
+        print(f"Erro ao ativar assinatura: {e}")
+        return False
+
+
+# ============================================
+# FUNÇÕES DE TESTERS
+# ============================================
+
+async def adicionar_tester(guild_id: str, nome: str = None, adicionado_por: str = None, motivo: str = None) -> bool:
+    """Adiciona um servidor como tester (acesso gratuito)."""
+    try:
+        response = supabase.table('testers').upsert({
+            'guild_id': guild_id,
+            'nome': nome,
+            'adicionado_por': adicionado_por,
+            'motivo': motivo,
+            'ativo': True
+        }).execute()
+        return bool(response.data)
+    except Exception as e:
+        print(f"Erro ao adicionar tester: {e}")
+        return False
+
+
+async def remover_tester(guild_id: str) -> bool:
+    """Remove um servidor da lista de testers."""
+    try:
+        supabase.table('testers').update({
+            'ativo': False
+        }).eq('guild_id', guild_id).execute()
+        return True
+    except Exception as e:
+        print(f"Erro ao remover tester: {e}")
+        return False
+
+
+async def verificar_tester(guild_id: str) -> bool:
+    """Verifica se um servidor é tester."""
+    try:
+        response = supabase.rpc('verificar_tester', {'p_guild_id': guild_id}).execute()
+        return response.data == True
+    except Exception as e:
+        print(f"Erro ao verificar tester: {e}")
+        return False
+
+
+async def listar_testers() -> List[Dict]:
+    """Lista todos os testers ativos."""
+    try:
+        response = supabase.table('testers').select('*').eq('ativo', True).execute()
+        return response.data or []
+    except Exception as e:
+        print(f"Erro ao listar testers: {e}")
+        return []
+
+
+async def simular_pagamento(guild_id: str) -> bool:
+    """Simula um pagamento para testes (ativa assinatura do pagamento pendente mais recente)."""
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                'https://rgopdilceawaqrgaoaca.supabase.co/functions/v1/simulate-payment',
+                json={'guild_id': guild_id},
+                headers={'Content-Type': 'application/json'}
+            ) as response:
+                return response.status == 200
+    except Exception as e:
+        print(f"Erro ao simular pagamento: {e}")
+        return False
+

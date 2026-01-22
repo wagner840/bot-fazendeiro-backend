@@ -2,7 +2,7 @@
 
 ## Visao Geral
 
-Bot Discord para gerenciamento economico de empresas em servidores de roleplay (RDR2/FiveM). Permite multiplas empresas por servidor Discord, controle de estoque, encomendas, pagamentos de funcionarios e integracao com frontend web.
+Bot Discord para gerenciamento economico de empresas em servidores de roleplay (RDR2/RedM). Permite multiplas empresas por servidor Discord, controle de estoque, encomendas, pagamentos de funcionarios e integracao com frontend web.
 
 ---
 

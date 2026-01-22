@@ -9,7 +9,7 @@ import discord
 from discord.ext import commands
 
 from config import DISCORD_TOKEN, supabase
-from database import get_empresas_by_guild, get_produtos_empresa
+from database import get_empresas_by_guild, get_produtos_empresa, verificar_assinatura_servidor
 from utils import selecionar_empresa
 
 
@@ -61,6 +61,71 @@ async def on_guild_join(guild):
     await canal.send(embed=embed)
 
 
+# ============================================
+# VERIFICAÇÃO GLOBAL DE ASSINATURA
+# ============================================
+
+# Comandos liberados mesmo sem assinatura ativa
+COMANDOS_LIVRES = {
+    'help', 'ajuda', 'comandos',
+    'assinatura', 'status', 'plano',
+    'assinarpix', 'renovar', 'assinar', 'planos',
+    'addtester', 'removetester', 'testers', 'simularpagamento', 'simpay', 'testpay'
+}
+
+# URL do frontend para checkout
+CHECKOUT_URL = "http://localhost:3000/checkout"
+
+
+def criar_embed_bloqueio():
+    """Cria embed de bloqueio por falta de assinatura."""
+    embed = discord.Embed(
+        title="⚠️ Assinatura Necessária",
+        description="Este servidor não possui uma assinatura ativa do Bot Fazendeiro.\n\n"
+                    "Para continuar usando o bot, é necessário renovar a assinatura.",
+        color=discord.Color.red()
+    )
+    embed.add_field(
+        name="🔗 Link para Pagamento",
+        value=f"[Clique aqui para assinar]({CHECKOUT_URL})",
+        inline=False
+    )
+    embed.add_field(
+        name="💳 Pagamento via PIX",
+        value="Pagamentos são confirmados instantaneamente!",
+        inline=False
+    )
+    embed.set_footer(text="Bot Fazendeiro | Sistema de Gestão Empresarial")
+    return embed
+
+
+@bot.check
+async def verificar_assinatura_global(ctx):
+    """Check global que verifica assinatura antes de cada comando."""
+    # Comandos livres não precisam de verificação
+    if ctx.command and ctx.command.name in COMANDOS_LIVRES:
+        return True
+    
+    # Também libera aliases dos comandos
+    if ctx.invoked_with and ctx.invoked_with.lower() in COMANDOS_LIVRES:
+        return True
+    
+    # Se não tiver guild (DM), bloqueia
+    if not ctx.guild:
+        await ctx.send("❌ Este bot só funciona em servidores!")
+        return False
+    
+    # Verifica assinatura do servidor
+    assinatura = await verificar_assinatura_servidor(str(ctx.guild.id))
+    
+    if not assinatura.get('ativa'):
+        embed = criar_embed_bloqueio()
+        await ctx.send(embed=embed)
+        return False
+    
+    return True
+
+
 @bot.event
 async def on_command_error(ctx, error):
     """Tratamento de erros."""
@@ -69,6 +134,9 @@ async def on_command_error(ctx, error):
     elif isinstance(error, commands.MissingPermissions):
         await ctx.send("❌ Você não tem permissão.")
     elif isinstance(error, commands.CommandNotFound):
+        pass
+    elif isinstance(error, commands.CheckFailure):
+        # Já foi tratado pelo check (assinatura inativa)
         pass
     else:
         print(f"Erro: {error}")
@@ -193,7 +261,8 @@ async def load_cogs():
         'cogs.admin',
         'cogs.precos',
         'cogs.producao',
-        'cogs.financeiro'
+        'cogs.financeiro',
+        'cogs.assinatura'
     ]
     
     for cog in cogs:

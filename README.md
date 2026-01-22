@@ -1,6 +1,6 @@
 # 🏢 Bot Fazendeiro Downtown
 
-Bot Discord para gerenciamento econômico de empresas em servidores de roleplay (RDR2/FiveM).
+Bot Discord para gerenciamento econômico de empresas em servidores de roleplay (RDR2/RedM).
 
 ## 🚀 Funcionalidades
 

@@ -1,7 +1,4 @@
-# Frontend (excluir do repositorio backend)
-frontend/
-
-# Python
+# === Python ===
 __pycache__/
 *.py[cod]
 *$py.class
@@ -10,26 +7,57 @@ __pycache__/
 .venv/
 venv/
 ENV/
+*.egg-info/
+dist/
+build/
 
-# Environment
+# === Environment ===
 .env
+*.local
 
-# IDE
+# === IDE ===
 .vscode/
 .idea/
 *.swp
 *.swo
+*.sublime-*
 
-# OS
+# === OS ===
 .DS_Store
 Thumbs.db
+Desktop.ini
 
-# Arquivos temporarios
+# === Temporary Files ===
 *.log
+*.tmp
 nul
+*.pyc
 
-# Claude
+# === Backup Files ===
+*_backup.py
+*.bak
+*.backup
+
+# === Claude/AI ===
 .claude/
+.gemini/
+.playwright-mcp/
 
-# PDF e documentos
+# === Supabase ===
+.supabase/
+
+# === Frontend (separate repo) ===
+frontend/
+
+# === PDF and large files ===
 *.pdf
+data/*.pdf
+
+# === Secrets (never commit) ===
+secrets/
+*.pem
+*.key
+
+# === Test Reports ===
+tests/RELATORIO_TESTES.md
+.pytest_cache/

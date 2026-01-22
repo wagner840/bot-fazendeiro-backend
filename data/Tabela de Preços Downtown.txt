@@ -1,0 +1,459 @@
+﻿Tabela de Preços Downtown - Última Atualização: 21/01/2026
+1. ALIMENTOS
+* Ensopado de Carne: $1,20 - $1,50
+* Costela de Porco Assada: $1,20 - $1,50
+* Carne Assada: $1,20 - $1,50
+* Sopa de Legumes: $1,20 - $1,50
+* Carne Seca: $1,20 - $1,50
+* Peixe Assado: $1,20 - $1,50
+* Batata Recheada: $1,20 - $1,50
+* Tortilhas: $1,20 - $1,50
+* Arroz Doce: $1,20 - $1,50
+* Frango Frito: $1,20 - $1,50
+* Frango Caipira: $1,20 - $1,50
+* Chilli com Carne: $1,20 - $1,50
+* Bife Acebolado: $1,20 - $1,50
+* Refeição Cowboy: $1,20 - $1,50
+* Feijoada: $1,20 - $1,50
+* Arroz de Carreteiro: $1,20 - $1,50
+* Sopa de Carne: $1,20 - $1,50
+* Sopa de Lentilhas: $1,20 - $1,50
+* Creme de Galinha: $1,20 - $1,50
+* Sopa de Feijão: $1,20 - $1,50
+* Arroz com Ovo: $1,20 - $1,50
+* Cuscuz com Ovo: $1,20 - $1,50
+* Buchada: $1,20 - $1,50
+* Picanha com Queijo: $1,20 - $1,50
+* Caldo de Costela: $1,20 - $1,50
+* Torresmo: $1,20 - $1,50
+* Kasseler Mit Sauerkraut: $1,20 - $1,50
+* Hardtack: $1,20 - $1,50
+* Porção de Peixe: $1,20 - $1,50
+* Churrasco: $1,20 - $1,50
+* Sapo de Chocolate: $1,20 - $1,50
+* Churros Sinaloa: $1,20 - $1,50
+* Geléia Pé de Bezerro: $1,20 - $1,50
+* Fricassê: $1,50 - $1,80
+* Salpicão: $1,50 - $1,80
+* Arroz a Grega: $1,50 - $1,80
+* Arroz com Passas: $1,50 - $1,80
+* Lasanha de Carne: $1,50 - $1,80
+* Batata Assada: $1,50 - $1,80
+* Frango Assado: $1,50 - $1,80
+* Lombo Apimentado: $1,50 - $1,80
+* Javali com Batatas: $1,50 - $1,80
+* Ramén: $2,50 - $3,10
+* Mochi: $2,60 - $3,10
+* Arroz Japonês: $2,70 - $3,10
+* Espetinho de Pombinho: $1,20 - $1,50
+* Pamonha: $1,20 - $1,50
+* Espetinho de Perereca: $1,20 - $1,50
+* Costela Bovina Assada: $1,20 - $1,50
+* Coxinha: $9,00 - $11,00
+2. BEBIDAS
+* Suco de Uva: $1,00 - $1,30
+* Suco de Amora: $1,00 - $1,30
+* Suco de Morango: $1,00 - $1,30
+* Limonada: $1,00 - $1,30
+* Suco de Pêssego: $1,00 - $1,30
+* Suco de Maçã: $1,00 - $1,30
+* Suco de Framboesa Vermelha: $1,00 - $1,30
+* Suco de Groselha Negra: $1,00 - $1,30
+* Suco de Ameixa: $1,00 - $1,30
+* Suco de Maracujá: $1,00 - $1,30
+* Limonada com Hortelã: $1,00 - $1,30
+* Hidromel sem Álcool: $1,00 - $1,30
+* Suco Verde: $1,00 - $1,30
+* Leite com Melado: $1,00 - $1,30
+* Suco de Cenoura: $1,00 - $1,30
+* Suco de Frutas Vermelhas: $1,00 - $1,30
+* Leite Quente: $1,00 - $1,30
+* Suco de Gengibre: $1,00 - $1,30
+* Creme de Café: $1,00 - $1,30
+* Batida de Framboesa: $1,00 - $1,30
+* Guaraná: $1,00 - $1,30
+* MilkShake de Morango: $1,00 - $1,30
+* Pinga Temperada: $1,00 - $1,30
+* Suco de Laranja Natural: $1,00 - $1,30
+* Suco de Laranja com Cenoura: $1,00 - $1,30
+* Conhaque: $1,00 - $1,30
+* Caipirinha de Gengibre: $1,00 - $1,30
+* Blood Mary: $1,00 - $1,30
+* Beijo da Prima de 2º Grau: $1,00 - $1,30
+* Tequila: $1,00 - $1,30
+* Cerveja Amanteigada: $1,00 - $1,30
+* Polissuco: $1,00 - $1,30
+* Chimarrão: $1,00 - $1,30
+* Tererê: $1,00 - $1,30
+* Rum Naufragado: $1,00 - $1,30
+* Suco de Corno: $0,60 - $1,10
+* Star Books: $0,90 - $1,35
+* Vinho: $1,50 - $1,80
+* Espumante: $1,50 - $1,80
+* Saquê: $2,80 - $3,20
+* Piña Colada: $1,00 - $1,30
+* Cerveja IPA: $1,20 - $1,50
+* Champanhe: $1,20 - $1,50
+* Suco de Limão: $1,50 - $1,80
+* Grogue: $1,50 - $1,80
+3. PADARIAS
+* Pudim: $0,95 - $1,15
+* Bolo de Chocolate: $1,00 - $1,20
+* Pão com Manteiga: $0,80 - $0,95
+* Donuts: $1,05 - $1,20
+* Biscoito: $0,90 - $1,05
+* Café: $0,75 - $0,90
+* Vitamina de Banana: $0,85 - $0,95
+* Chocolate Quente: $0,90 - $1,00
+* Vitamina de Morango: $0,85 - $0,95
+* Vitamina de Guaraná: $0,85 - $0,95
+* Pão de Melado: $1,20 - $1,50
+* Sonho de Creme: $0,95 - $1,20
+* Croissant Doce: $1,15 - $1,50
+* Cappuccino: $0,90 - $1,20
+* Pesadelo de Doce de Leite: $0,90 - $1,35
+* Morango do Amor: $1,50 - $2,00
+* Suco de Morango: $1,00 - $1,30
+* Torta de Morango: $1,50 - $2,00
+* Chocotone: $1,50 - $1,80
+* Panetone: $1,50 - $1,80
+* Biscoito Natalino: $1,50 - $1,80
+* Bengala de Natal: $1,50 - $1,80
+* Coca Cola: $1,50 - $1,80
+4. FAZENDAS
+* Plantações: $0,13 - $0,19
+* Álcool Artesanal: $0,36 - $0,52
+* Álcool Industrial: $0,44 - $0,78
+* Cerveja de Trigo: $0,41 - $0,63
+* Farinha de Trigo: $0,20 - $0,30
+* Açúcar: $0,14 - $0,21
+* Melado de Cana: $0,17 - $0,26
+* Amido de Milho: $0,20 - $0,31
+* Óleo de Milho: $0,23 - $0,34
+* Licor de Café: $0,62 - $0,79
+* Pó de Café: $0,23 - $0,29
+* Molho de Tomate: $0,24 - $0,39
+* Ketchup: $0,27 - $0,42
+* Batata Palha: $0,33 - $0,49
+* Amido de Batata: $0,13 - $0,22
+* Arroz Branco: $0,21 - $0,25
+* Farinha de Arroz: $0,21 - $0,25
+* Fibra de Linho: $0,17 - $0,25
+* Óleo de Linhaça: $0,22 - $0,33
+* Fibra de Algodão: $0,19 - $0,24
+* Celulose: $0,14 - $0,21
+* Fumo: $0,20 - $0,26
+* Tabaco Curado: $0,24 - $0,31
+* Pó de Pimenta: $0,19 - $0,24
+* Conserva de Pimenta: $0,21 - $0,29
+* Creme de Leite: $0,60 - $0,80
+* Cacau em Pó: $0,20 - $0,30
+* Pólvora: $0,30 - $0,50
+* Cascalho: $0,18 - $0,22
+* Leite de Búfala: $0,11 - $0,16
+* Couro de Búfalo: $0,11 - $0,16
+* Lã de Ovelha: $0,11 - $0,16
+* Ovos: $0,11 - $0,16
+* Leite de Cabra: $0,11 - $0,16
+* Leite de Ovelha: $0,11 - $0,16
+* Leite de Vaca: $0,11 - $0,16
+* Leite de Mula: $0,11 - $0,16
+* Leite de Porca: $0,11 - $0,16
+* Taurina: $0,11 - $0,16
+* Favo de Mel: $0,20 - $0,30
+* Couro de Mula: $0,11 - $0,16
+* Crina de Galo: $0,11 - $0,16
+* Carne de Porco: $0,11 - $0,16
+* Buchada de Bode: $0,11 - $0,16
+5. SACAS
+* Saca de Milho: $40,00 - $60,00
+* Saca de Cenouras: $40,00 - $60,00
+* Saca de Uvas: $40,00 - $60,00
+* Saca de Maçã: $40,00 - $60,00
+* Saca de Feijão: $40,00 - $60,00
+* Saca de Arroz: $40,00 - $60,00
+* Saca de Tomate: $40,00 - $60,00
+6. AÇOUGUES
+Carnes Vermelhas * Picanha: $0,75 - $1,13
+* Alcatra: $0,65 - $0,95
+* Fraldinha: $0,60 - $0,85
+* Costela: $0,63 - $0,88
+* Filé Mignon: $0,70 - $1,05
+* Acém: $0,58 - $0,80
+* Maminha: $0,63 - $0,90
+* Cupim: $0,68 - $0,95
+* Carne Moída: $0,50 - $0,70
+* Patinho: $0,58 - $0,80
+Carnes de Aves * Coxa de Ave: $0,43 - $0,55
+* Sobrecoxa de Ave: $0,45 - $0,58
+* Peito de Ave: $0,50 - $0,65
+* Asa de Ave: $0,38 - $0,80
+* Moela: $0,30 - $0,40
+* Fígado de Ave: $0,30 - $0,40
+* Coração de Ave: $0,38 - $0,53
+Carnes de Peixe * Filé de Peixe: $0,50 - $0,70
+* Posta de Peixe: $0,45 - $0,60
+* Lombo de Peixe: $0,48 - $0,63
+* Pele de Peixe: $0,28 - $0,38
+* Peixe Defumado: $0,63 - $0,75
+Carnes de Porco * Costela de Porco: $0,60 - $0,85
+* Pernil de Porco: $0,65 - $0,90
+* Lomba de Porco: $0,80 - $1,00
+* Panceta: $0,55 - $0,75
+Carnes Raras * Carne de Cobra: $0,80 - $1,00
+* Carne de Jacaré: $0,80 - $1,13
+* Carne de Urso: $1,25 - $1,55
+* Carne de Lobo: $1,00 - $1,25
+* Carne de Iguana: $0,88 - $1,13
+* Carne de Bisão: $1,13 - $1,38
+* Carne Exótica: $0,80 - $1,00
+* Mistura: $0,69 - $0,95
+7. GRÁFICA DE MANUAIS
+* Manual de Pistola: $20,00 - $22,00
+* Manual de Repetidora: $25,00 - $28,00
+* Manual de Rifle: $20,00 - $22,00
+* Manual de Shotgun: $25,00 - $27,00
+* Manual de Munições: $2,00 - $4,00
+* Manual de Revolver: $20,00 - $22,00
+* Manual da Cruza: $200,00 - $300,00
+* Livro de Caldeiras Avançadas: $500,00 - $800,00
+* Upgrade do Barco: $500,00 - $800,00
+8. ESTÁBULOS
+* Treinamento de Cavalo (1 Vez): $45,00 - $55,00
+* Ferradura de Ouro: $8,00 - $9,50
+* Ferradura de Ferro: $5,00 - $6,50
+* Super Boost Equino: $1,50 - $3,00
+* Revitalizador Equino: $10,00 - $12,00
+* Escova Equina: $1,00 - $1,50
+* Libid Gel Concentrado: $1.000,00 - $1.200,00
+* Acessório para Cavalo: $1,00 - $1,50
+* Doce Equino: $1,00 - $1,20
+* Cupcake Equino: $1,00 - $1,20
+* Remédio Equino: $1,50 - $3,00
+9. ARTESANATOS
+* Linha de Algodão: $0,50 - $0,80
+* Garrafa de Vidro: $1,00 - $1,50
+* Frasco de Vidro: $0,80 - $1,20
+* Cápsula Plástica: $0,30 - $0,50
+* Alça de Couro: $0,80 - $1,20
+* Mochila 20 Kg: $40,00 - $60,00
+* Embalagem: $0,50 - $0,80
+* Coador: $0,50 - $1,00
+* Vara de Pescar: $15,00 - $20,00
+* Buquê de Rosas Vermelhas: $15,00 - $30,00
+* Buquê de Tulipas: $15,00 - $30,00
+* Tampa de Garrafa: $0,10 - $0,20
+* Isca de Pesca: $0,50 - $0,80
+* Orelhas: $18,00 - $26,00
+* Caixote de Madeira: $0,26 - $0,40
+10. JORNAL
+* Cartaz para Poste: $10,00 - $15,00
+* Seda: $0,50 - $0,70
+* Impressão-Matérias: $1,00 - $1,20
+* Rótulo: $0,55 - $0,73
+* Carta de Coleção: $1,00 - $1,30
+* Pacote de Cartas (5x cartas sortidas): $5,80 - $6,30
+* Tinta: $1,00 - $1,50
+* Câmera Fotográfica: $25,00 - $50,00
+11. ATELIÊ
+* Roupa Simples: $50,00 - $80,00
+* Acessórios: $30,00 - $50,00
+* Roupa Personalizada: $100,00 - $150,00
+* Pomada de Cabelo: $13,00 - $18,00
+* Toalha: $1,00 - $2,00
+* Anel de Casamento: $500,00 - $600,00
+12. CAVALARIA
+* Placa de Arma: $100,00 - $150,00
+* Escolta Particular: $200,00
+13. TABACARIA
+* Charuto: $4,00 - $5,00
+* Charuto de Chocolate: $4,00 - $5,00
+* Cigarro: $3,00 - $4,00
+* Goma de Tabaco: $9,00 - $11,00
+* Pipe: $8,00 - $10,00
+* Cigarro de Maconha: $5,00 - $6,00
+* Óleo de Maconha: $0,24 - $0,32
+14. TATUAGENS
+* Tatuagens na Cabeça: $1.500,00 - $2.000,00
+* Tatuagens no Peito/Costas: $1.500,00 - $2.000,00
+* Ticket Tatuagem: $2.000,00 - $2.500,00
+* Removedor de Tatuagem: $1.000,00 - $1.200,00
+15. MÉDICOS
+Insumos e Tratamentos * Seringa Médica: $15,00 - $20,00
+* Antibiótico: $7,00 - $11,00
+* Bandagem: $5,00 - $10,00
+* Antídoto Hemotóxico: $6,00 - $8,00
+* Antídoto Proteolítico: $6,00 - $8,00
+* Tala: $7,00 - $10,00
+* Energético: $10,00 - $15,00
+* Vacina: $25,00 - $30,00
+* Tratamento: $70,00 - $75,00
+Atendimentos * Atendimento em Geral: $15,00
+* Atendimento em Ambarino: $20,00
+* Atendimento em New Austin: $25,00
+* Atendimento em Guarma: $20,00
+* Atendimento em Annesburg: $20,00
+* Atendimento na Ilha Pirata: $20,00
+16. MINERADORA
+Minérios Comuns * Minério de Ferro: $0,18 - $0,26
+* Minério de Salitre: $0,22 - $0,28
+* Minério de Cobre: $0,22 - $0,28
+Minérios Raros * Minério de Manganês: $0,26 - $0,38
+* Minério de Enxofre: $0,28 - $0,40
+* Minério de Prata: $0,32 - $0,46
+Minérios Muito Raros * Minério de Platina: $0,52 - $0,78
+* Minério de Ouro: $0,68 - $0,95
+Minerais Não Metálicos * Areia: $0,11 - $0,16
+* Sal: $0,11 - $0,18
+* Turfa: $0,12 - $0,20
+17. MADEIREIRA
+* Madeira de Pinheiro: $0,12 - $0,16
+* Madeira de Cedro: $0,12 - $0,16
+* Madeira de Carvalho: $0,12 - $0,16
+* Tora de Pinheiro: $0,22 - $0,28
+* Tora de Cedro: $0,22 - $0,28
+* Tora de Carvalho: $0,22 - $0,28
+* Serragem: $0,12 - $0,14
+* Carvão Vegetal: $0,24 - $0,28
+* Tábua Leve: $0,18 - $0,27
+* Tábua Bruta: $0,22 - $0,33
+* Viga de Madeira: $0,26 - $0,39
+* Lenha Rachada: $0,28 - $0,34
+* Tábua de Carne: $1,00 - $2,00
+* Essência de Madeira: $0,28 - $0,42
+18. FERRARIA
+Lingotes * Lingote de Ferro: $2,52 - $3,64
+* Lingote de Platina: $7,28 - $10,92
+* Lingote de Ouro: $9,52 - $13,30
+* Lingote de Cobre: $5,60 - $11,20
+* Lingote de Aço: $8,12 - $14,84
+Ferramentas e Outros * Faca de Esfolar: $1,50 - $2,50
+* Cutelo de Açougueiro: $1,00 - $1,50
+* Picareta: $2,00 - $3,00
+* Pregos: $0,10 - $0,20
+* Lança: $50,00 - $70,00
+* Machado: $3,00 - $4,50
+* Pá de Escavação: $1,50 - $2,50
+* Pá de Escavação Profissional: $15,00 - $17,00
+* Moedor: $6,00 - $8,00
+* Seringa de Vidro: $1,00 - $1,50
+* Cápsula de Metal: $1,20 - $1,33
+19. NATIVOS
+* Fogueira: $5,00 - $10,00
+* Tomahawk: $10,00 - $18,00
+* Tomahawk Pct (3x): $15,00 - $20,00
+* Tocha: $10,00 - $15,00
+* Flecha Normal: $5,00 - $7,00
+* Arco Simples: $10,00 - $15,00
+* Laço Reforçado: $10,00 - $12,00
+* Libid Gel Equino: $100,00 - $200,00
+* Libid Gel Equino para Estábulo: $50,00 - $100,00
+20. MERCEARIA
+* Livro de Sobrevivência: $8,00 - $10,00
+* Sabonete: $1,00 - $2,00
+* Areia Refinada: $0,19 - $0,22
+* Calculadora: $10,00 - $12,00
+* Bateria: $1,00 - $1,30
+* Garrafa de Água: $0,10 - $0,15
+21. BERÇÁRIOS
+* Gados: $7,50 - $12,00
+* Porcos: $7,50 - $12,00
+* Ovelhas: $7,50 - $12,00
+* Galinhas: $7,50 - $12,00
+* Mulas: $7,50 - $12,00
+* Cabras: $7,50 - $12,00
+* Búfalos: $7,50 - $12,00
+22. AGROINDÚSTRIA
+Rações * Ração para Gado: $3,00 - $4,00
+* Ração para Porco: $3,00 - $4,00
+* Ração para Ovelhas: $3,00 - $4,00
+* Ração para Galinhas: $3,00 - $4,00
+* Ração para Mulas: $3,00 - $4,00
+* Ração para Cabras: $3,00 - $4,00
+* Ração para Búfalos: $3,00 - $4,00
+* Ração Premium para PET: $2,00 - $3,00
+Insumos e Cuidados * KIT Médico para PET: $25,00 - $30,00
+* Balde de Água: $0,80 - $0,85
+* Fertilizante: $0,50 - $0,60
+* Sementes: $0,18 - $0,23
+* Rastelo: $1,00 - $1,20
+* Água para PET: $1,00 - $2,00
+* Adubo: $0,15 - $0,20
+* Petbox: $60,00 - $65,00
+* Gordura Animal Curada: $0,16 - $0,24
+* Pano Grosso: $0,20 - $0,36
+* Sal Refinado: $0,21 - $0,22
+* Papelão Rústico: $0,09 - $0,15
+* Fita Decorativa: $0,16 - $0,26
+* Cola: $0,20 - $0,50
+* Verniz: $0,22 - $0,34
+* Garrafa de Água Vazia: $0,08 - $0,12
+* Farinha: $0,25 - $0,30
+Libidgels * Libidgel Asneira: $1,50 - $2,00
+* Libidgel Aviário: $1,50 - $2,00
+* Libidgel Bovino: $1,50 - $2,00
+* Libidgel Bufalino: $1,50 - $2,00
+* Libidgel Caprino: $1,50 - $2,00
+* Libidgel Ovino: $1,50 - $2,00
+* Libidgel Suíno: $1,50 - $2,00
+23. CARTÓRIO
+* Porte de Revólver: $150,00
+* Porte de Pistola: $175,00
+* Porte de Repetidora: $225,00
+* Porte de Rifle: $250,00
+* Porte de Shotgun: $275,00
+* Porte para Armas de Herança: $500,00
+* Porte Completo (Todos os tipos): $1.400,00
+* Alteração de Porte: $150,00
+* Registro de Armamento: $225,00
+* Casamento Simples: $1.250,00
+* Casamento C/ Troca de Nome: $1.750,00
+* Divórcio: $2.000,00
+* Limpeza de Ficha (Unidade): $325,00
+* Mudança de Nome: $2.250,00
+* Mudança de Sobrenome: $1.125,00
+* Proteção de Ação de Rua: $80,00 - $120,00
+* Proteção de Ação Fechada: $150,00 - $200,00
+24. ARMARIAS
+Repetidoras * Repetidora Winchester (Placa): $250,00 - $300,00
+* Repetidora Evans (Placa): $250,00 - $300,00
+* Repetidora Carabina: $200,00 - $240,00
+* Repetidora Henry: $180,00 - $220,00
+Rifles * Rifle de Ferrolho (Placa): $350,00 - $400,00
+* Rifle Springfield: $300,00 - $350,00
+Revólveres * Revólver Lemat (Placa): $210,00 - $230,00
+* Revólver Schofield: $100,00 - $150,00
+* Revólver Double Action: $120,00 - $160,00
+* Revólver Vaqueiro Mexicano: $60,00 - $100,00
+Pistolas * Pistola M1899 (Placa): $300,00 - $325,00
+* Pistola Mauser (Placa): $237,00 - $260,00
+* Pistola Semi-Auto: $120,00 - $180,00
+* Pistola Volcanic: $180,00 - $200,00
+Shotguns * Shotgun Double Barrel (Placa): $280,00 - $350,00
+Diversos * Pano para Armas: $8,00 - $12,00
+* Personalizações de Armas (por item): $60,00 - $100,00
+25. MUNIÇÕES
+Munição Comum * Munição de Pistola: $5,50 - $7,50
+* Munição de Repetidora: $6,50 - $9,00
+* Munição de Revólver: $2,50 - $3,00
+* Munição de Rifle: $8,00 - $10,50
+* Munição de Shotgun: $9,00 - $11,00
+Munição Especial (Expressa, Velocidade e Ponto Dividido) * Repetição Expressa: $25,00 - $38,00
+* Revólver Expressa: $18,00 - $26,00
+* Pistola Expressa: $18,00 - $26,00
+* Rifle Expressa: $45,00 - $62,00
+* Repetição de Velocidade: $25,00 - $38,00
+* Revólver de Velocidade: $18,00 - $26,00
+* Pistola de Velocidade: $18,00 - $26,00
+* Rifle de Velocidade: $45,00 - $62,00
+* Repetição de Ponto Dividido: $25,00 - $38,00
+* Revólver de Ponto Dividido: $18,00 - $26,00
+* Pistola de Ponto Dividido: $18,00 - $26,00
+* Rifle de Ponto Dividido: $45,00 - $62,00
+26. PÁSSAROS (EXEMPLOS SELECIONADOS)
+* Falcão Ferruginoso: $100,00 - $120,00
+* Coruja Grande: $300,00 - $320,00
+* Coruja Lendária: $3.000,00 - $3.200,00
+* Águia Careca: $400,00 - $420,00
+* Arara Azul/Amarela: $300,00 - $320,00
+* Flamingo Rosado: $400,00 - $420,00

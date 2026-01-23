@@ -1,7 +1,12 @@
 import aiohttp
 import asyncio
 
-ASAAS_API_KEY = "$aact_hmlg_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OmE5OGQ3OWU0LWJmMDYtNGY4My1iNTk2LThkZmY1YjUzNGZhNTo6JGFhY2hfYWZmNDg4OGMtMmMwOC00ODg3LWEwODEtZmUyMjQ5OTlmNTBm"
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+ASAAS_API_KEY = os.getenv("ASAAS_SANDBOX_API_KEY")
 ASAAS_API_URL = "https://sandbox.asaas.com/api/v3"
 
 async def test_asaas():

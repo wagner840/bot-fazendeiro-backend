@@ -72,6 +72,11 @@ async def create_pix_charge(req: PixChargeRequest):
         logger.error("Asaas API Key missing during charge creation.")
         raise HTTPException(status_code=500, detail="Asaas API Key not configured")
 
+    # Determine API URL dynamically or fallback to Sandbox
+    # Priority: Env Var > Default Sandbox
+    # Note: User can set ASAAS_API_URL in .env to https://api.asaas.com/api/v3 for production
+    current_asaas_url = os.getenv('ASAAS_API_URL', "https://sandbox.asaas.com/api/v3")
+
     headers = {
         "access_token": ASAAS_API_KEY,
         "Content-Type": "application/json"
@@ -90,7 +95,7 @@ async def create_pix_charge(req: PixChargeRequest):
             raise HTTPException(status_code=500, detail="Database error fetching plan")
 
         # 2. Create/Get Customer in Asaas
-        # Use provided email or fallback to a dummy one (NOT RECOMMENDED for prod, but kept for MVP compatibility if email not sent)
+        # Use provided email or fallback to a dummy one
         customer_email = req.email or f"user_{req.pagador_discord_id}@fazendeiro.bot"
         
         customer_data = {
@@ -99,21 +104,21 @@ async def create_pix_charge(req: PixChargeRequest):
             "externalReference": req.pagador_discord_id
         }
 
-        async with session.post(f"{ASAAS_API_URL}/customers", headers=headers, json=customer_data) as resp:
+        async with session.post(f"{current_asaas_url}/customers", headers=headers, json=customer_data) as resp:
             if resp.status != 200:
                 text = await resp.text()
                 logger.warning(f"Asaas Customer Creation Error: {text}")
                 
                 if "customer_email_unique" in text:
                      # Fallback: search by email
-                     async with session.get(f"{ASAAS_API_URL}/customers?email={customer_data['email']}", headers=headers) as search_resp:
+                     async with session.get(f"{current_asaas_url}/customers?email={customer_data['email']}", headers=headers) as search_resp:
                          search_data = await search_resp.json()
-                         if search_data.get('data'):
+                         if search_data.get('data') and len(search_data['data']) > 0:
                              customer_id = search_data['data'][0]['id']
                              logger.info(f"Found existing customer: {customer_id}")
                          else: 
                              logger.error("Customer creation failed and search returned empty.")
-                             raise HTTPException(status_code=400, detail="Customer creation failed")
+                             raise HTTPException(status_code=400, detail=f"Customer creation failed: {text}")
                 else: 
                      # Try to parse error
                      try:
@@ -124,7 +129,7 @@ async def create_pix_charge(req: PixChargeRequest):
                              raise Exception("No ID in response")
                      except:
                          logger.error(f"Critical error creating customer. Response: {text}")
-                         raise HTTPException(status_code=500, detail="Error creating payment customer")
+                         raise HTTPException(status_code=500, detail=f"Error creating payment customer: {text}")
             else:
                 customer_json = await resp.json()
                 customer_id = customer_json['id']
@@ -136,13 +141,13 @@ async def create_pix_charge(req: PixChargeRequest):
         charge_data = {
             "customer": customer_id,
             "billingType": "PIX",
-            "value": plano['preco'],
+            "value": float(plano['preco']), # Ensure float
             "dueDate": due_date,
             "description": f"Assinatura Bot Fazendeiro - {plano['nome']}",
             "externalReference": f"{req.guild_id}_{req.plano_id}_{int(datetime.datetime.now().timestamp())}"
         }
 
-        async with session.post(f"{ASAAS_API_URL}/payments", headers=headers, json=charge_data) as resp:
+        async with session.post(f"{current_asaas_url}/payments", headers=headers, json=charge_data) as resp:
             if resp.status != 200:
                 text = await resp.text()
                 logger.error(f"Asaas Payment Error: {text}")
@@ -151,10 +156,11 @@ async def create_pix_charge(req: PixChargeRequest):
             logger.info(f"Created charge: {charge['id']}")
 
         # 4. Get QR Code
-        async with session.get(f"{ASAAS_API_URL}/payments/{charge['id']}/pixQrCode", headers=headers) as resp:
+        async with session.get(f"{current_asaas_url}/payments/{charge['id']}/pixQrCode", headers=headers) as resp:
             if resp.status != 200:
-                 logger.error("Error retrieving QR Code")
-                 raise HTTPException(status_code=500, detail="Error retrieving QR Code")
+                 text = await resp.text()
+                 logger.error(f"Error retrieving QR Code: {text}")
+                 raise HTTPException(status_code=500, detail=f"Error retrieving QR Code: {text}")
             qr_data = await resp.json()
 
         # 5. Save to Database
@@ -167,12 +173,14 @@ async def create_pix_charge(req: PixChargeRequest):
                 'status': 'pendente',
                 'qr_code': qr_data['encodedImage'],
                 'copia_cola': qr_data['payload'],
-                'valor': plano['preco'],
+                'valor': float(plano['preco']),
                 'link_pagamento': charge.get('invoiceUrl')
             }).execute()
         except Exception as e:
             logger.error(f"DB Error saving payment: {e}")
-            raise HTTPException(status_code=500, detail="Error saving payment to database")
+            # Do not fail request if DB fails, as Payment IS created. User can retry or check web.
+            # But better to warn.
+            pass 
 
         return {
             "payment_id": charge['id'],

@@ -6,6 +6,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from fastapi.middleware.cors import CORSMiddleware
+import asyncio
 import datetime
 
 # Custom Logging
@@ -53,6 +54,7 @@ class PixChargeRequest(BaseModel):
     guild_id: str
     plano_id: int
     pagador_discord_id: str
+    cpf_cnpj: str # Added CPF/CNPJ
     email: Optional[str] = None # Optional email
 
 class WebhookEvent(BaseModel):
@@ -101,6 +103,7 @@ async def create_pix_charge(req: PixChargeRequest):
         customer_data = {
             "name": f"User {req.pagador_discord_id}",
             "email": customer_email, 
+            "cpfCnpj": req.cpf_cnpj, # Critical for PIX
             "externalReference": req.pagador_discord_id
         }
 
@@ -116,6 +119,15 @@ async def create_pix_charge(req: PixChargeRequest):
                          if search_data.get('data') and len(search_data['data']) > 0:
                              customer_id = search_data['data'][0]['id']
                              logger.info(f"Found existing customer: {customer_id}")
+                             
+                             # UPDATE customer with new CPF/CNPJ
+                             update_data = {"cpfCnpj": req.cpf_cnpj}
+                             async with session.put(f"{current_asaas_url}/customers/{customer_id}", headers=headers, json=update_data) as update_resp:
+                                 if update_resp.status == 200:
+                                     logger.info(f"Updated customer {customer_id} with CPF.")
+                                 else:
+                                     logger.warning(f"Failed to update customer CPF: {await update_resp.text()}")
+
                          else: 
                              logger.error("Customer creation failed and search returned empty.")
                              raise HTTPException(status_code=400, detail=f"Customer creation failed: {text}")
@@ -155,24 +167,35 @@ async def create_pix_charge(req: PixChargeRequest):
             charge = await resp.json()
             logger.info(f"Created charge: {charge['id']}")
 
-        # 4. Get QR Code
-        async with session.get(f"{current_asaas_url}/payments/{charge['id']}/pixQrCode", headers=headers) as resp:
-            if resp.status != 200:
-                 text = await resp.text()
-                 logger.error(f"Error retrieving QR Code: {text}")
-                 raise HTTPException(status_code=500, detail=f"Error retrieving QR Code: {text}")
-            qr_data = await resp.json()
+        # 4. Get QR Code (Robust Retry)
+        qr_data = None
+        for attempt in range(3):
+            async with session.get(f"{current_asaas_url}/payments/{charge['id']}/pixQrCode", headers=headers) as resp:
+                if resp.status == 200:
+                    qr_data = await resp.json()
+                    break
+                elif resp.status == 404:
+                    logger.warning(f"QR Code not ready yet (Attempt {attempt+1}/3). Retrying in 1s...")
+                    await asyncio.sleep(1)
+                else:
+                    text = await resp.text()
+                    logger.error(f"Error retrieving QR Code: {text}")
+                    raise HTTPException(status_code=500, detail=f"Error retrieving QR Code: {text}")
+        
+        if not qr_data:
+             logger.error("Timeout retrieving QR Code from Asaas after retries.")
+             raise HTTPException(status_code=504, detail="Timeout retrieving QR Code from Asaas")
 
         # 5. Save to Database
         try:
             supabase.table('pagamentos_pix').insert({
-                'payment_id': charge['id'],
+                'pix_id': charge['id'],
                 'guild_id': req.guild_id,
                 'plano_id': req.plano_id,
                 'discord_id': req.pagador_discord_id,
                 'status': 'pendente',
-                'qr_code': qr_data['encodedImage'],
-                'copia_cola': qr_data['payload'],
+                'pix_qrcode': qr_data['encodedImage'],
+                'pix_copia_cola': qr_data['payload'],
                 'valor': float(plano['preco']),
                 'link_pagamento': charge.get('invoiceUrl')
             }).execute()
@@ -217,10 +240,10 @@ async def handle_webhook(request: Request, asaas_access_token: Optional[str] = H
             logger.info(f"Payment confirmed: {payment_id}")
             
             # Update Payment Status
-            supabase.table('pagamentos_pix').update({'status': 'pago'}).eq('payment_id', payment_id).execute()
+            supabase.table('pagamentos_pix').update({'status': 'pago'}).eq('pix_id', payment_id).execute()
             
             # Get payment details to activate subscription
-            pay_record = supabase.table('pagamentos_pix').select('*').eq('payment_id', payment_id).single().execute()
+            pay_record = supabase.table('pagamentos_pix').select('*').eq('pix_id', payment_id).single().execute()
             
             if pay_record.data:
                 guild_id = pay_record.data['guild_id']

@@ -24,6 +24,7 @@ if ASAAS_API_KEY:
     logger.info(f"ASAAS_API_KEY loaded. Length: {len(ASAAS_API_KEY)}")
 else:
     logger.warning("ASAAS_API_KEY NOT loaded.")
+    logger.info(f"Available Env Vars: {list(os.environ.keys())}") # DEBUG: List all keys
 
 ASAAS_API_URL = "https://sandbox.asaas.com/api/v3"
 SUPABASE_URL = os.getenv('SUPABASE_URL')

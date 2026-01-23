@@ -11,7 +11,11 @@ load_dotenv()
 
 # Configuration
 ASAAS_API_KEY = os.getenv('ASAAS_API_KEY') or os.getenv('ASAAS_SANDBOX_API_KEY')
-print(f"DEBUG: ASAAS_API_KEY loaded? {'Yes' if ASAAS_API_KEY else 'No'}")
+if ASAAS_API_KEY:
+    print(f"DEBUG: ASAAS_API_KEY loaded. Length: {len(ASAAS_API_KEY)}. First 5 chars: {ASAAS_API_KEY[:5]}")
+else:
+    print("DEBUG: ASAAS_API_KEY NOT loaded.")
+
 ASAAS_API_URL = "https://sandbox.asaas.com/api/v3"
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')

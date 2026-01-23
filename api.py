@@ -27,7 +27,7 @@ else:
 
 ASAAS_API_URL = "https://sandbox.asaas.com/api/v3"
 SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY'), 
 
 # Initialize clients
 app = FastAPI()
@@ -36,7 +36,9 @@ app = FastAPI()
 origins = [
     FRONTEND_URL,
     "http://localhost:3000",
-    "https://bot-fazendeiro-dashboard.vercel.app" # Example production URL
+    "https://bot-fazendeiro-dashboard.vercel.app", # Example production URL
+    "http://fazendabot.einsof7.com",
+    "https://fazendabot.einsof7.com"
 ]
 
 app.add_middleware(

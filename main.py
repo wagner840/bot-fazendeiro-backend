@@ -11,6 +11,7 @@ from discord.ext import commands
 from config import DISCORD_TOKEN, supabase
 from database import get_empresas_by_guild, get_produtos_empresa, verificar_assinatura_servidor
 from utils import selecionar_empresa
+from logging_config import logger
 
 
 # ============================================
@@ -32,11 +33,11 @@ bot = commands.Bot(command_prefix='!', intents=intents, help_command=None)
 @bot.event
 async def on_ready():
     """Bot está pronto."""
-    print('============================================')
-    print('  Bot Multi-Empresa Downtown conectado!')
-    print(f'  Usuario: {bot.user.name}')
-    print(f'  Servidores: {len(bot.guilds)}')
-    print('============================================')
+    logger.info('============================================')
+    logger.info('  Bot Multi-Empresa Downtown conectado!')
+    logger.info(f'  Usuario: {bot.user.name}')
+    logger.info(f'  Servidores: {len(bot.guilds)}')
+    logger.info('============================================')
     
     await bot.change_presence(
         activity=discord.Activity(
@@ -139,7 +140,7 @@ async def on_command_error(ctx, error):
         # Já foi tratado pelo check (assinatura inativa)
         pass
     else:
-        print(f"Erro: {error}")
+        logger.error(f"Erro no comando: {error}")
         await ctx.send("❌ Ocorreu um erro.")
 
 
@@ -268,9 +269,9 @@ async def load_cogs():
     for cog in cogs:
         try:
             await bot.load_extension(cog)
-            print(f"  [OK] Cog carregada: {cog}")
+            logger.info(f"  [OK] Cog carregada: {cog}")
         except Exception as e:
-            print(f"  [ERRO] Erro ao carregar {cog}: {e}")
+            logger.error(f"  [ERRO] Erro ao carregar {cog}: {e}")
 
 
 # ============================================
@@ -288,8 +289,8 @@ async def start_api():
 
 async def main():
     """Função principal."""
-    print("Iniciando Bot Multi-Empresa Downtown...")
-    print("Carregando Cogs...")
+    logger.info("Iniciando Bot Multi-Empresa Downtown...")
+    logger.info("Carregando Cogs...")
     await load_cogs()
     
     # Run Bot and API concurrently

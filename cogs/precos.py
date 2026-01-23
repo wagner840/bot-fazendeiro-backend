@@ -13,6 +13,7 @@ from database import (
     configurar_produto_empresa
 )
 from utils import empresa_configurada, selecionar_empresa
+from logging_config import logger
 
 
 class PrecosCog(commands.Cog, name="Preços"):
@@ -454,7 +455,7 @@ class PrecosCog(commands.Cog, name="Preços"):
                     'preco_func': novo_preco_func
                 })
             except Exception as e:
-                print(f"Erro ao atualizar {codigo}: {e}")
+                logger.error(f"Erro ao atualizar {codigo}: {e}")
         
         try:
             await progress_msg.delete()

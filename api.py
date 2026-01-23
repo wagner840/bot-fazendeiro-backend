@@ -1,34 +1,46 @@
 import os
 import aiohttp
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Header
 from pydantic import BaseModel
 from typing import Optional
 from dotenv import load_dotenv
 from supabase import create_client, Client
+from fastapi.middleware.cors import CORSMiddleware
+import datetime
+
+# Custom Logging
+from logging_config import logger
 
 # Load env vars
 load_dotenv()
 
 # Configuration
 ASAAS_API_KEY = os.getenv('ASAAS_API_KEY') or os.getenv('ASAAS_SANDBOX_API_KEY')
+ASAAS_WEBHOOK_TOKEN = os.getenv('ASAAS_WEBHOOK_TOKEN')  # Ensure this is set in .env
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+
 if ASAAS_API_KEY:
-    print(f"DEBUG: ASAAS_API_KEY loaded. Length: {len(ASAAS_API_KEY)}. First 5 chars: {ASAAS_API_KEY[:5]}")
+    logger.info(f"ASAAS_API_KEY loaded. Length: {len(ASAAS_API_KEY)}")
 else:
-    print("DEBUG: ASAAS_API_KEY NOT loaded.")
+    logger.warning("ASAAS_API_KEY NOT loaded.")
 
 ASAAS_API_URL = "https://sandbox.asaas.com/api/v3"
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
-from fastapi.middleware.cors import CORSMiddleware
-
 # Initialize clients
 app = FastAPI()
 
 # CORS Middleware
+origins = [
+    FRONTEND_URL,
+    "http://localhost:3000",
+    "https://bot-fazendeiro-dashboard.vercel.app" # Example production URL
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all for now to ensure it works, then restrict
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -41,6 +53,7 @@ class PixChargeRequest(BaseModel):
     guild_id: str
     plano_id: int
     pagador_discord_id: str
+    email: Optional[str] = None # Optional email
 
 class WebhookEvent(BaseModel):
     event: str
@@ -53,7 +66,10 @@ async def root():
 @app.post("/api/pix/create")
 async def create_pix_charge(req: PixChargeRequest):
     """Creates a customer and a PIX charge in Asaas."""
+    logger.info(f"Received PIX charge request: {req.dict()}")
+
     if not ASAAS_API_KEY:
+        logger.error("Asaas API Key missing during charge creation.")
         raise HTTPException(status_code=500, detail="Asaas API Key not configured")
 
     headers = {
@@ -66,50 +82,55 @@ async def create_pix_charge(req: PixChargeRequest):
         try:
             plan_resp = supabase.table('planos').select('*').eq('id', req.plano_id).single().execute()
             if not plan_resp.data:
+                logger.warning(f"Plan not found: {req.plano_id}")
                 raise HTTPException(status_code=404, detail="Plano not found")
             plano = plan_resp.data
         except Exception as e:
-            print(f"Error fetching plan: {e}")
+            logger.error(f"Error fetching plan: {e}")
             raise HTTPException(status_code=500, detail="Database error fetching plan")
 
         # 2. Create/Get Customer in Asaas
-        # Ideally we search first, but for now we'll create or use existing if we store asaas_id later.
-        # For simplicity in this flow, we'll create a new customer or use a generic one if not provided.
-        # In a real app, you should check `empresas` table for an existing `asaas_customer_id`.
+        # Use provided email or fallback to a dummy one (NOT RECOMMENDED for prod, but kept for MVP compatibility if email not sent)
+        customer_email = req.email or f"user_{req.pagador_discord_id}@fazendeiro.bot"
         
-        # Helper: Get user email/name from discord (optional, sticking to basics)
         customer_data = {
             "name": f"User {req.pagador_discord_id}",
-            "email": "email@example.com", 
+            "email": customer_email, 
             "externalReference": req.pagador_discord_id
         }
 
-        # Check if company exists to link
-        empresa_resp = supabase.table('empresas').select('*').eq('guild_id', req.guild_id).execute()
-        
         async with session.post(f"{ASAAS_API_URL}/customers", headers=headers, json=customer_data) as resp:
             if resp.status != 200:
                 text = await resp.text()
-                print(f"Asaas Customer Error: {text}")
-                # If email already exists, Asaas might return 400. We should handle search.
-                # For this MVP, we proceed. If it fails, check logs.
+                logger.warning(f"Asaas Customer Creation Error: {text}")
+                
                 if "customer_email_unique" in text:
                      # Fallback: search by email
                      async with session.get(f"{ASAAS_API_URL}/customers?email={customer_data['email']}", headers=headers) as search_resp:
                          search_data = await search_resp.json()
-                         if search_data['data']:
+                         if search_data.get('data'):
                              customer_id = search_data['data'][0]['id']
+                             logger.info(f"Found existing customer: {customer_id}")
                          else: 
+                             logger.error("Customer creation failed and search returned empty.")
                              raise HTTPException(status_code=400, detail="Customer creation failed")
                 else: 
-                     customer_json = await resp.json()
-                     customer_id = customer_json.get('id')
+                     # Try to parse error
+                     try:
+                        customer_json = await resp.json()
+                        if 'id' in customer_json:
+                             customer_id = customer_json.get('id')
+                        else:
+                             raise Exception("No ID in response")
+                     except:
+                         logger.error(f"Critical error creating customer. Response: {text}")
+                         raise HTTPException(status_code=500, detail="Error creating payment customer")
             else:
                 customer_json = await resp.json()
                 customer_id = customer_json['id']
+                logger.info(f"Created new customer: {customer_id}")
 
         # 3. Create Payment
-        import datetime
         due_date = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
         
         charge_data = {
@@ -124,20 +145,22 @@ async def create_pix_charge(req: PixChargeRequest):
         async with session.post(f"{ASAAS_API_URL}/payments", headers=headers, json=charge_data) as resp:
             if resp.status != 200:
                 text = await resp.text()
-                print(f"Asaas Payment Error: {text}") # Debug print
+                logger.error(f"Asaas Payment Error: {text}")
                 raise HTTPException(status_code=500, detail=f"Error creating charge: {text}")
             charge = await resp.json()
+            logger.info(f"Created charge: {charge['id']}")
 
         # 4. Get QR Code
         async with session.get(f"{ASAAS_API_URL}/payments/{charge['id']}/pixQrCode", headers=headers) as resp:
             if resp.status != 200:
+                 logger.error("Error retrieving QR Code")
                  raise HTTPException(status_code=500, detail="Error retrieving QR Code")
             qr_data = await resp.json()
 
         # 5. Save to Database
         try:
             supabase.table('pagamentos_pix').insert({
-                'payment_id': charge['id'], # Asaas ID
+                'payment_id': charge['id'],
                 'guild_id': req.guild_id,
                 'plano_id': req.plano_id,
                 'discord_id': req.pagador_discord_id,
@@ -148,7 +171,7 @@ async def create_pix_charge(req: PixChargeRequest):
                 'link_pagamento': charge.get('invoiceUrl')
             }).execute()
         except Exception as e:
-            print(f"DB Error: {e}")
+            logger.error(f"DB Error saving payment: {e}")
             raise HTTPException(status_code=500, detail="Error saving payment to database")
 
         return {
@@ -159,14 +182,21 @@ async def create_pix_charge(req: PixChargeRequest):
         }
 
 @app.post("/api/pix/webhook")
-async def handle_webhook(request: Request):
+async def handle_webhook(request: Request, asaas_access_token: Optional[str] = Header(None)):
     """Handles Asaas Webhooks."""
-    # Verify signature if needed (Asaas sends access-token in header usually)
-    # token = request.headers.get('asaas-access-token')
-    # if token != WEBHOOK_TOKEN: return ...
+    
+    # 1. Security Verification
+    if ASAAS_WEBHOOK_TOKEN and asaas_access_token != ASAAS_WEBHOOK_TOKEN:
+        logger.warning(f"Unauthorized Webhook attempt. Token: {asaas_access_token}")
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    if not ASAAS_WEBHOOK_TOKEN:
+        logger.warning("ASAAS_WEBHOOK_TOKEN not set! Webhook is INSECURE.")
 
     try:
         data = await request.json()
+        logger.info(f"Webhook received: {data}")
+        
         event = data.get('event')
         payment = data.get('payment')
         
@@ -176,6 +206,8 @@ async def handle_webhook(request: Request):
         payment_id = payment.get('id')
         
         if event == 'PAYMENT_RECEIVED' or event == 'PAYMENT_CONFIRMED':
+            logger.info(f"Payment confirmed: {payment_id}")
+            
             # Update Payment Status
             supabase.table('pagamentos_pix').update({'status': 'pago'}).eq('payment_id', payment_id).execute()
             
@@ -191,9 +223,6 @@ async def handle_webhook(request: Request):
                 days = plano.data['duracao_dias']
                 
                 # Update/Create Subscription
-                # Using RPC or direct insert/update logic to set expiration
-                # Ideally, call a procedure. For now, we calculate expiration.
-                import datetime
                 expiration = (datetime.datetime.now() + datetime.timedelta(days=days)).isoformat()
                 
                 # Check if exists
@@ -201,9 +230,6 @@ async def handle_webhook(request: Request):
                 
                 if existing.data:
                     # Update
-                    current_exp = existing.data[0]['data_expiracao']
-                    # logic to extend if already active? For now, we just set new expiration from TODAY or extend?
-                    # Simple rule: set to now + days
                     supabase.table('assinaturas').update({
                         'plano_id': plano_id,
                         'data_inicio': datetime.datetime.now().isoformat(),
@@ -211,6 +237,7 @@ async def handle_webhook(request: Request):
                         'status': 'ativa',
                         'pagamento_status': 'pago'
                     }).eq('guild_id', guild_id).execute()
+                    logger.info(f"Subscription updated for guild {guild_id}")
                 else:
                     # Create
                     supabase.table('assinaturas').insert({
@@ -221,11 +248,14 @@ async def handle_webhook(request: Request):
                         'status': 'ativa',
                         'pagamento_status': 'pago'
                     }).execute()
+                    logger.info(f"Subscription created for guild {guild_id}")
                 
                 return {"status": "success", "action": "subscription_activated"}
+            else:
+                logger.error(f"Payment record not found for webhook payment_id: {payment_id}")
 
         return {"status": "received", "event": event}
 
     except Exception as e:
-        print(f"Webhook Error: {e}")
+        logger.error(f"Webhook Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -6,6 +6,7 @@ Todas as funções que interagem com o Supabase.
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict
 from config import supabase, empresas_cache, servidores_cache
+from logging_config import logger
 
 
 # ============================================
@@ -36,7 +37,7 @@ async def get_or_create_servidor(guild_id: str, nome: str, proprietario_id: str)
             return response.data[0]
         return None
     except Exception as e:
-        print(f"Erro ao obter/criar servidor: {e}")
+        logger.error(f"Erro ao obter/criar servidor: {e}")
         return None
 
 
@@ -52,7 +53,7 @@ async def get_servidor_by_guild(guild_id: str) -> Optional[Dict]:
             return response.data[0]
         return None
     except Exception as e:
-        print(f"Erro ao buscar servidor: {e}")
+        logger.error(f"Erro ao buscar servidor: {e}")
         return None
 
 
@@ -89,7 +90,7 @@ async def criar_usuario_frontend(
 
         return response.data[0] if response.data else None
     except Exception as e:
-        print(f"Erro ao criar usuário frontend: {e}")
+        logger.error(f"Erro ao criar usuário frontend: {e}")
         return None
 
 
@@ -101,7 +102,7 @@ async def get_usuario_frontend(discord_id: str, guild_id: str) -> Optional[Dict]
         ).eq('guild_id', guild_id).eq('ativo', True).execute()
         return response.data[0] if response.data else None
     except Exception as e:
-        print(f"Erro ao buscar usuário frontend: {e}")
+        logger.error(f"Erro ao buscar usuário frontend: {e}")
         return None
 
 
@@ -113,7 +114,7 @@ async def get_usuarios_frontend_by_guild(guild_id: str) -> List[Dict]:
         ).eq('ativo', True).execute()
         return response.data or []
     except Exception as e:
-        print(f"Erro ao buscar usuários frontend: {e}")
+        logger.error(f"Erro ao buscar usuários frontend: {e}")
         return []
 
 
@@ -123,7 +124,7 @@ async def atualizar_role_usuario_frontend(usuario_id: int, role: str) -> bool:
         supabase.table('usuarios_frontend').update({'role': role}).eq('id', usuario_id).execute()
         return True
     except Exception as e:
-        print(f"Erro ao atualizar role: {e}")
+        logger.error(f"Erro ao atualizar role: {e}")
         return False
 
 
@@ -133,7 +134,7 @@ async def desativar_usuario_frontend(usuario_id: int) -> bool:
         supabase.table('usuarios_frontend').update({'ativo': False}).eq('id', usuario_id).execute()
         return True
     except Exception as e:
-        print(f"Erro ao desativar usuário: {e}")
+        logger.error(f"Erro ao desativar usuário: {e}")
         return False
 
 
@@ -147,7 +148,7 @@ async def get_tipos_empresa() -> List[Dict]:
         response = supabase.table('tipos_empresa').select('*').eq('ativo', True).order('nome').execute()
         return response.data
     except Exception as e:
-        print(f"Erro ao buscar tipos de empresa: {e}")
+        logger.error(f"Erro ao buscar tipos de empresa: {e}")
         return []
 
 
@@ -166,7 +167,7 @@ async def get_empresa_by_guild(guild_id: str) -> Optional[Dict]:
             return response.data[0]
         return None
     except Exception as e:
-        print(f"Erro ao buscar empresa: {e}")
+        logger.error(f"Erro ao buscar empresa: {e}")
         return None
 
 
@@ -179,7 +180,7 @@ async def get_empresas_by_guild(guild_id: str) -> List[Dict]:
         
         return response.data or []
     except Exception as e:
-        print(f"Erro ao buscar empresas: {e}")
+        logger.error(f"Erro ao buscar empresas: {e}")
         return []
 
 
@@ -203,7 +204,7 @@ async def criar_empresa(guild_id: str, nome: str, tipo_empresa_id: int, propriet
             return response.data[0]
         return None
     except Exception as e:
-        print(f"Erro ao criar empresa: {e}")
+        logger.error(f"Erro ao criar empresa: {e}")
         raise e
 
 async def atualizar_modo_pagamento(empresa_id: int, modo: str) -> bool:
@@ -217,7 +218,7 @@ async def atualizar_modo_pagamento(empresa_id: int, modo: str) -> bool:
         }).eq('id', empresa_id).execute()
         return True
     except Exception as e:
-        print(f"Erro ao atualizar modo pagamento: {e}")
+        logger.error(f"Erro ao atualizar modo pagamento: {e}")
         return False
 
 
@@ -229,7 +230,7 @@ async def get_produtos_referencia(tipo_empresa_id: int) -> List[Dict]:
         ).eq('ativo', True).order('categoria', desc=False).order('nome').execute()
         return response.data
     except Exception as e:
-        print(f"Erro ao buscar produtos: {e}")
+        logger.error(f"Erro ao buscar produtos: {e}")
         return []
 
 
@@ -242,7 +243,7 @@ async def get_produtos_empresa(empresa_id: int) -> Dict[str, Dict]:
         
         return {p['produtos_referencia']['codigo']: p for p in response.data}
     except Exception as e:
-        print(f"Erro ao buscar produtos da empresa: {e}")
+        logger.error(f"Erro ao buscar produtos da empresa: {e}")
         return {}
 
 
@@ -268,7 +269,7 @@ async def configurar_produto_empresa(empresa_id: int, produto_ref_id: int, preco
             }).execute()
         return True
     except Exception as e:
-        print(f"Erro ao configurar produto: {e}")
+        logger.error(f"Erro ao configurar produto: {e}")
         return False
 
 
@@ -302,7 +303,7 @@ async def get_or_create_funcionario(discord_id: str, nome: str, empresa_id: int 
 
         return func_id
     except Exception as e:
-        print(f"Erro ao obter/criar funcionário: {e}")
+        logger.error(f"Erro ao obter/criar funcionário: {e}")
         return None
 
 
@@ -327,7 +328,7 @@ async def vincular_funcionario_empresa(funcionario_id: int, empresa_id: int) -> 
 
         return True
     except Exception as e:
-        print(f"Erro ao vincular funcionário-empresa: {e}")
+        logger.error(f"Erro ao vincular funcionário-empresa: {e}")
         return False
 
 
@@ -337,7 +338,7 @@ async def get_funcionario_by_discord_id(discord_id: str) -> Optional[Dict]:
         response = supabase.table('funcionarios').select('*').eq('discord_id', discord_id).execute()
         return response.data[0] if response.data else None
     except Exception as e:
-        print(f"Erro ao buscar funcionário: {e}")
+        logger.error(f"Erro ao buscar funcionário: {e}")
         return None
 
 
@@ -350,7 +351,7 @@ async def get_funcionarios_empresa(empresa_id: int) -> List[Dict]:
 
         return [item['funcionarios'] for item in response.data if item.get('funcionarios')]
     except Exception as e:
-        print(f"Erro ao buscar funcionários da empresa: {e}")
+        logger.error(f"Erro ao buscar funcionários da empresa: {e}")
         return []
 
 
@@ -387,7 +388,7 @@ async def adicionar_ao_estoque(funcionario_id: int, empresa_id: int, codigo: str
             }).execute()
             return {'quantidade': quantidade, 'nome': produto['produtos_referencia']['nome']}
     except Exception as e:
-        print(f"Erro ao adicionar estoque: {e}")
+        logger.error(f"Erro ao adicionar estoque: {e}")
         return None
 
 
@@ -425,7 +426,7 @@ async def remover_do_estoque(funcionario_id: int, empresa_id: int, codigo: str, 
         
         return {'quantidade': nova_qtd, 'nome': nome, 'removido': quantidade}
     except Exception as e:
-        print(f"Erro ao remover estoque: {e}")
+        logger.error(f"Erro ao remover estoque: {e}")
         return None
 
 
@@ -451,7 +452,7 @@ async def get_estoque_funcionario(funcionario_id: int, empresa_id: int) -> List[
                 })
         return result
     except Exception as e:
-        print(f"Erro ao buscar estoque: {e}")
+        logger.error(f"Erro ao buscar estoque: {e}")
         return []
 
 
@@ -474,7 +475,7 @@ async def get_estoque_global(empresa_id: int) -> List[Dict]:
         
         return list(totais.values())
     except Exception as e:
-        print(f"Erro ao buscar estoque global: {e}")
+        logger.error(f"Erro ao buscar estoque global: {e}")
         return []
 
 
@@ -486,7 +487,7 @@ async def zerar_estoque_funcionario(funcionario_id: int, empresa_id: int) -> boo
         ).eq('empresa_id', empresa_id).execute()
         return True
     except Exception as e:
-        print(f"Erro ao zerar estoque: {e}")
+        logger.error(f"Erro ao zerar estoque: {e}")
         return False
 
 
@@ -512,7 +513,7 @@ async def registrar_transacao(
         }).execute()
         return True
     except Exception as e:
-        print(f"Erro ao registrar transação: {e}")
+        logger.error(f"Erro ao registrar transação: {e}")
         return False
 
 
@@ -526,7 +527,7 @@ async def get_transacoes_empresa(empresa_id: int, limit: int = 50) -> List[Dict]
         ).limit(limit).execute()
         return response.data or []
     except Exception as e:
-        print(f"Erro ao buscar transações: {e}")
+        logger.error(f"Erro ao buscar transações: {e}")
         return []
 
 
@@ -543,7 +544,7 @@ async def get_saldo_empresa(empresa_id: int) -> float:
                 saldo -= float(t['valor'])
         return saldo
     except Exception as e:
-        print(f"Erro ao calcular saldo: {e}")
+        logger.error(f"Erro ao calcular saldo: {e}")
         return 0.0
 
 
@@ -566,7 +567,7 @@ async def criar_encomenda(empresa_id: int, comprador: str, itens: List[Dict]) ->
         
         return response.data[0] if response.data else None
     except Exception as e:
-        print(f"Erro ao criar encomenda: {e}")
+        logger.error(f"Erro ao criar encomenda: {e}")
         return None
 
 
@@ -578,7 +579,7 @@ async def get_encomendas_pendentes(empresa_id: int) -> List[Dict]:
         ).eq('status', 'pendente').order('data_criacao').execute()
         return response.data or []
     except Exception as e:
-        print(f"Erro ao buscar encomendas: {e}")
+        logger.error(f"Erro ao buscar encomendas: {e}")
         return []
 
 
@@ -588,7 +589,7 @@ async def get_encomenda(encomenda_id: int) -> Optional[Dict]:
         response = supabase.table('encomendas').select('*').eq('id', encomenda_id).execute()
         return response.data[0] if response.data else None
     except Exception as e:
-        print(f"Erro ao buscar encomenda: {e}")
+        logger.error(f"Erro ao buscar encomenda: {e}")
         return None
 
 
@@ -604,7 +605,7 @@ async def atualizar_status_encomenda(encomenda_id: int, status: str, entregador_
         supabase.table('encomendas').update(data).eq('id', encomenda_id).execute()
         return True
     except Exception as e:
-        print(f"Erro ao atualizar encomenda: {e}")
+        logger.error(f"Erro ao atualizar encomenda: {e}")
         return False
 
 
@@ -638,7 +639,7 @@ async def atualizar_modo_pagamento(empresa_id: int, modo: str) -> bool:
         }).eq('id', empresa_id).execute()
         return True
     except Exception as e:
-        print(f"Erro ao atualizar modo de pagamento: {e}")
+        logger.error(f"Erro ao atualizar modo de pagamento: {e}")
         return False
 
 
@@ -663,7 +664,7 @@ async def verificar_assinatura_servidor(guild_id: str) -> dict:
             'plano_nome': None
         }
     except Exception as e:
-        print(f"Erro ao verificar assinatura: {e}")
+        logger.error(f"Erro ao verificar assinatura: {e}")
         return {'ativa': False, 'status': 'erro', 'dias_restantes': 0}
 
 
@@ -678,7 +679,7 @@ async def get_assinatura_servidor(guild_id: str) -> Optional[Dict]:
             return response.data[0]
         return None
     except Exception as e:
-        print(f"Erro ao buscar assinatura: {e}")
+        logger.error(f"Erro ao buscar assinatura: {e}")
         return None
 
 
@@ -688,7 +689,7 @@ async def get_planos_disponiveis() -> List[Dict]:
         response = supabase.table('planos').select('*').eq('ativo', True).order('preco').execute()
         return response.data or []
     except Exception as e:
-        print(f"Erro ao buscar planos: {e}")
+        logger.error(f"Erro ao buscar planos: {e}")
         return []
 
 
@@ -707,7 +708,7 @@ async def criar_pagamento_pix(guild_id: str, plano_id: int, valor: float) -> Opt
             return response.data[0]
         return None
     except Exception as e:
-        print(f"Erro ao criar pagamento PIX: {e}")
+        logger.error(f"Erro ao criar pagamento PIX: {e}")
         return None
 
 
@@ -722,7 +723,7 @@ async def ativar_assinatura_servidor(guild_id: str, plano_id: int, pagador_disco
         
         return response.data == True
     except Exception as e:
-        print(f"Erro ao ativar assinatura: {e}")
+        logger.error(f"Erro ao ativar assinatura: {e}")
         return False
 
 
@@ -742,7 +743,7 @@ async def adicionar_tester(guild_id: str, nome: str = None, adicionado_por: str 
         }).execute()
         return bool(response.data)
     except Exception as e:
-        print(f"Erro ao adicionar tester: {e}")
+        logger.error(f"Erro ao adicionar tester: {e}")
         return False
 
 
@@ -754,7 +755,7 @@ async def remover_tester(guild_id: str) -> bool:
         }).eq('guild_id', guild_id).execute()
         return True
     except Exception as e:
-        print(f"Erro ao remover tester: {e}")
+        logger.error(f"Erro ao remover tester: {e}")
         return False
 
 
@@ -764,7 +765,7 @@ async def verificar_tester(guild_id: str) -> bool:
         response = supabase.rpc('verificar_tester', {'p_guild_id': guild_id}).execute()
         return response.data == True
     except Exception as e:
-        print(f"Erro ao verificar tester: {e}")
+        logger.error(f"Erro ao verificar tester: {e}")
         return False
 
 
@@ -774,7 +775,7 @@ async def listar_testers() -> List[Dict]:
         response = supabase.table('testers').select('*').eq('ativo', True).execute()
         return response.data or []
     except Exception as e:
-        print(f"Erro ao listar testers: {e}")
+        logger.error(f"Erro ao listar testers: {e}")
         return []
 
 
@@ -790,6 +791,6 @@ async def simular_pagamento(guild_id: str) -> bool:
             ) as response:
                 return response.status == 200
     except Exception as e:
-        print(f"Erro ao simular pagamento: {e}")
+        logger.error(f"Erro ao simular pagamento: {e}")
         return False
 

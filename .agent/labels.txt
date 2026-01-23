@@ -1,0 +1,15 @@
+traefik.enable=true
+traefik.http.middlewares.gzip.compress=true
+traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+traefik.http.routers.http-0-i80oc44oo4s00go4wogo4kcg.entryPoints=http
+traefik.http.routers.http-0-i80oc44oo4s00go4wogo4kcg.middlewares=gzip
+traefik.http.routers.http-0-i80oc44oo4s00go4wogo4kcg.rule=Host(`fazendabot.einsof7.com`) && PathPrefix(`/`)
+traefik.http.routers.http-0-i80oc44oo4s00go4wogo4kcg.service=http-0-i80oc44oo4s00go4wogo4kcg
+traefik.http.services.http-0-i80oc44oo4s00go4wogo4kcg.loadbalancer.server.port=3000
+caddy_0.encode=zstd gzip
+caddy_0.handle_path.0_reverse_proxy={{upstreams 3000}}
+caddy_0.handle_path=/*
+caddy_0.header=-Server
+caddy_0.try_files={path} /index.html /index.php
+caddy_0.http://fazendabot.einsof7.com
+caddy_ingress_network=coolify

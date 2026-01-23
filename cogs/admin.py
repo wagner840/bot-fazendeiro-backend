@@ -18,6 +18,7 @@ from database import (
     get_or_create_funcionario
 )
 from utils import empresa_configurada, selecionar_empresa
+from logging_config import logger
 
 
 class AdminCog(commands.Cog, name="Administração"):
@@ -402,7 +403,7 @@ class AdminCog(commands.Cog, name="Administração"):
 
             await ctx.send(embed=embed)
         except Exception as e:
-            print(f"Erro ao listar usuários: {e}")
+            logger.error(f"Erro ao listar usuários: {e}")
             await ctx.send("❌ Erro ao listar usuários.")
 
     @commands.command(name='removeracesso')
@@ -426,7 +427,7 @@ class AdminCog(commands.Cog, name="Administração"):
             else:
                 await ctx.send(f"⚠️ {membro.display_name} não tinha acesso ao frontend.")
         except Exception as e:
-            print(f"Erro ao remover acesso: {e}")
+            logger.error(f"Erro ao remover acesso: {e}")
             await ctx.send("❌ Erro ao remover acesso.")
 
     @commands.command(name='promover')
@@ -451,7 +452,7 @@ class AdminCog(commands.Cog, name="Administração"):
                 }).eq('id', existing.data[0]['id']).execute()
                 await ctx.send(f"✅ {membro.mention} promovido para **Admin**!")
         except Exception as e:
-            print(f"Erro ao promover: {e}")
+            logger.error(f"Erro ao promover: {e}")
             await ctx.send("❌ Erro ao promover usuário.")
 
     @commands.command(name='bemvindo')

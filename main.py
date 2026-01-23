@@ -278,26 +278,14 @@ async def load_cogs():
 # INICIALIZAÇÃO
 # ============================================
 
-async def start_api():
-    """Inicia o servidor API."""
-    import uvicorn
-    from api import app
-    
-    config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
-    server = uvicorn.Server(config)
-    await server.serve()
-
 async def main():
     """Função principal."""
     logger.info("Iniciando Bot Multi-Empresa Downtown...")
     logger.info("Carregando Cogs...")
     await load_cogs()
     
-    # Run Bot and API concurrently
-    await asyncio.gather(
-        bot.start(DISCORD_TOKEN),
-        start_api()
-    )
+    # Run Bot Only (API must be run separately via uvicorn)
+    await bot.start(DISCORD_TOKEN)
 
 
 if __name__ == '__main__':

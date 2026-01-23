@@ -28,7 +28,7 @@ else:
 
 ASAAS_API_URL = "https://sandbox.asaas.com/api/v3"
 SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY'), 
+SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY') 
 
 # Initialize clients
 app = FastAPI()

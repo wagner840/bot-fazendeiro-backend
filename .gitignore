@@ -1,63 +1,10 @@
-# === Python ===
+
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
-.Python
-.venv/
-venv/
-ENV/
-*.egg-info/
-dist/
-build/
-
-# === Environment ===
 .env
-*.local
-
-# === IDE ===
-.vscode/
-.idea/
-*.swp
-*.swo
-*.sublime-*
-
-# === OS ===
-.DS_Store
-Thumbs.db
-Desktop.ini
-
-# === Temporary Files ===
+.venv
+env/
+venv/
 *.log
-*.tmp
-nul
-*.pyc
-
-# === Backup Files ===
-*_backup.py
-*.bak
-*.backup
-
-# === Claude/AI ===
-.claude/
-.gemini/
-.playwright-mcp/
-
-# === Supabase ===
-.supabase/
-
-# === Frontend (separate repo) ===
-frontend/
-
-# === PDF and large files ===
-*.pdf
-data/*.pdf
-
-# === Secrets (never commit) ===
-secrets/
-*.pem
-*.key
-
-# === Test Reports ===
-tests/RELATORIO_TESTES.md
-.pytest_cache/
+deployment-*.txt

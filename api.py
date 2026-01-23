@@ -124,6 +124,7 @@ async def create_pix_charge(req: PixChargeRequest):
         async with session.post(f"{ASAAS_API_URL}/payments", headers=headers, json=charge_data) as resp:
             if resp.status != 200:
                 text = await resp.text()
+                print(f"Asaas Payment Error: {text}") # Debug print
                 raise HTTPException(status_code=500, detail=f"Error creating charge: {text}")
             charge = await resp.json()
 

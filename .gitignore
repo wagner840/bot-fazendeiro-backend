@@ -8,3 +8,6 @@ env/
 venv/
 *.log
 deployment-*.txt
+
+frontend/
+.claude/

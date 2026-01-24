@@ -257,50 +257,95 @@ class Assinatura(commands.Cog):
 
     @commands.command(name='validarpagamento', aliases=['verificarpagamento', 'claimpayment'])
     async def validar_pagamento(self, ctx):
-        """Valida manualmente um pagamento pendente feito pelo usuário."""
+        """Valida manualmente um pagamento pendente ou pago, confirmando no Asaas."""
         from database import buscar_pagamento_pendente_usuario, atualizar_pagamento_guild, ativar_assinatura_servidor
+        from config import ASAAS_API_KEY
+        import aiohttp
+        import os
         
         discord_id = str(ctx.author.id)
         guild_id = str(ctx.guild.id)
         
-        await ctx.send(f"🔍 Buscando pagamentos pendentes para <@{discord_id}>...")
+        await ctx.send(f"🔍 Buscando transações recentes para <@{discord_id}>...")
         
+        # Busca qualquer pagamento recente (pendente ou pago)
         pagamento = await buscar_pagamento_pendente_usuario(discord_id)
         
         if not pagamento:
-            await ctx.send("❌ Nenhum pagamento pendente encontrado no seu nome.\nCertifique-se de ter gerado o QR Code e realizado o pagamento.")
+            await ctx.send("❌ Nenhum registro de pagamento encontrado.\nCertifique-se de ter gerado o QR Code recentemente.")
             return
             
-        # Encontrou pagamento
         pix_id = pagamento['pix_id']
-        valor = pagamento['valor']
-        plano_id = pagamento['plano_id']
-        status_atual = pagamento['status']
-        
-        await ctx.send(f"📄 Encontrado pagamento de R$ {valor:.2f} (Status: {status_atual}).\nVinculando a este servidor...")
-        
-        # 1. Vincular ao servidor atual
-        if pagamento['guild_id'] != guild_id:
+        valor = pagamento.get('valor', 0)
+        plano_id = pagamento.get('plano_id')
+        status_db = pagamento.get('status')
+
+        # 1. Vincular ao servidor atual se necessário
+        if pagamento['guild_id'] != guild_id and pagamento['guild_id'] == 'pending_activation':
+            await ctx.send(f"🔗 Vinculando pagamento de R$ {valor} a este servidor...")
             updated = await atualizar_pagamento_guild(pix_id, guild_id)
             if not updated:
-                await ctx.send("❌ Erro ao vincular pagamento ao servidor.")
+                await ctx.send("❌ Erro ao vincular pagamento.")
                 return
+        elif pagamento['guild_id'] != guild_id:
+             await ctx.send(f"⚠️ Atenção: Este pagamento está vinculado a outro servidor (ID: {pagamento['guild_id']}).\nNão posso transferi-lo automaticamente.")
+             return
+
+        # 2. Verificação Real no Asaas
+        # Se status já é 'pago' no banco, confiamos no banco (Webhook funcionou) e apenas ativamos a assinatura
+        if status_db == 'pago':
+            await ctx.send("✅ Pagamento já consta como confirmado no sistema. Ativando assinatura...")
+            success = await ativar_assinatura_servidor(guild_id, plano_id, discord_id)
+            if success:
+                await ctx.send(f"🎉 **Sucesso!** Assinatura ativa para **{ctx.guild.name}**.")
+            else:
+                await ctx.send("❌ Erro ao ativar assinatura (Erro Interno).")
+            return
+
+        # Se 'pendente', consultamos a API do Asaas
+        await ctx.send("🌐 Consultando Banco Central/Asaas para confirmação...")
         
-        # 2. Ativar assinatura (Manual Override for Dev/Localhost environment)
-        # Em produção, deveria checar API do Asaas aqui. 
-        # Como o problema é localhost não recebendo webhook, vamos confiar que se o usuário rodou o comando, ele pagou.
-        # Ou poderíamos checar a API se tivéssemos a chave.
+        current_asaas_url = os.getenv('ASAAS_API_URL', "https://sandbox.asaas.com/api/v3")
+        headers = {"access_token": ASAAS_API_KEY}
         
-        await ctx.send("✅ Pagamento vinculado! Verificando assinatura...")
-        
-        # Simula o recebimento do webhook (força ativação)
-        # Isso é seguro pois só ativa se existir um registro de pagamento no banco
-        success = await ativar_assinatura_servidor(guild_id, plano_id, discord_id)
-        
-        if success:
-            await ctx.send(f"🎉 **Sucesso!** Assinatura ativada para **{ctx.guild.name}**.\nUse `!configurar` para começar.")
+        if not ASAAS_API_KEY:
+            # Fallback para Dev
+            await ctx.send("⚠️ API Key não configurada. Modo Dev: Validando automaticamente.")
+            status_real = 'CONFIRMED'
         else:
-            await ctx.send("❌ Erro ao ativar assinatura no banco de dados.")
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(f"{current_asaas_url}/payments/{pix_id}", headers=headers) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            status_real = data.get('status')
+                        else:
+                            await ctx.send("❌ Erro de comunicação com o gateway de pagamento.")
+                            return
+            except Exception as e:
+                await ctx.send(f"❌ Erro de conexão: {e}")
+                return
+
+        # 3. Processa Resultado
+        if status_real in ['RECEIVED', 'CONFIRMED']:
+            await ctx.send("💸 Pagamento confirmado! Finalizando configuração...")
+            
+            # Atualiza status no banco para evitar reuso malicioso (embora idempotência de data resolva)
+            # A função ativar_assinatura_servidor idealmente chamaria process_payment_confirmation, 
+            # mas vamos manter simples chamando direto o DB update aqui para garantir.
+            from config import supabase
+            supabase.table('pagamentos_pix').update({'status': 'pago'}).eq('pix_id', pix_id).execute()
+            
+            success = await ativar_assinatura_servidor(guild_id, plano_id, discord_id)
+            
+            if success:
+                await ctx.send(f"🎉 **Parabéns!** O servidor **{ctx.guild.name}** está com assinatura ativa!\nUse `!configurar` para iniciar.")
+            else:
+                await ctx.send("❌ Assinatura não pôde ser ativada no banco de dados.")
+        elif status_real == 'PENDING':
+            await ctx.send("⏳ O pagamento ainda está pendente no banco. Tente novamente em alguns segundos.")
+        else:
+             await ctx.send(f"❌ O status do pagamento é: {status_real}. Não foi possível ativar.")
 
 
 async def setup(bot):

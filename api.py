@@ -17,7 +17,7 @@ load_dotenv()
 
 # Configuration
 # Configuration
-from config import ASAAS_API_KEY, ASAAS_API_URL, ASAAS_WEBHOOK_TOKEN, supabase, SUPABASE_URL
+from config import ASAAS_API_KEY, ASAAS_API_URL, ASAAS_WEBHOOK_TOKEN, supabase
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
 if ASAAS_API_KEY:
@@ -45,7 +45,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+# supabase client is already imported from config and initialized there
 
 # Models
 class PixChargeRequest(BaseModel):

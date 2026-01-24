@@ -11,6 +11,9 @@ from supabase import create_client, Client
 # Carrega variáveis de ambiente
 load_dotenv()
 
+# Regex para produtos (ex: pa2 va10)
+PRODUTO_REGEX = re.compile(r'([a-zA-Z]+)(\d+)')
+
 # Configurações do Discord
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 

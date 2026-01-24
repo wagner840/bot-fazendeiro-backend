@@ -71,7 +71,8 @@ COMANDOS_LIVRES = {
     'help', 'ajuda', 'comandos',
     'assinatura', 'status', 'plano',
     'assinarpix', 'renovar', 'assinar', 'planos',
-    'addtester', 'removetester', 'testers', 'simularpagamento', 'simpay', 'testpay'
+    'addtester', 'removetester', 'testers', 'simularpagamento', 'simpay', 'testpay',
+    'validarpagamento'
 }
 
 # URL do frontend para checkout

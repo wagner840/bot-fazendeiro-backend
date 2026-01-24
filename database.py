@@ -712,6 +712,32 @@ async def criar_pagamento_pix(guild_id: str, plano_id: int, valor: float) -> Opt
         return None
 
 
+
+async def buscar_pagamento_pendente_usuario(discord_id: str) -> Optional[Dict]:
+    """Busca pagamento pendente mais recente do usuário (independente da guild)."""
+    try:
+        response = supabase.table('pagamentos_pix').select('*').eq(
+            'discord_id', discord_id
+        ).eq('status', 'pendente').order('created_at', desc=True).limit(1).execute()
+        
+        return response.data[0] if response.data else None
+    except Exception as e:
+        logger.error(f"Erro ao buscar pagamento pendente usuário: {e}")
+        return None
+
+
+async def atualizar_pagamento_guild(pix_id: str, guild_id: str) -> bool:
+    """Atualiza a guild_id de um pagamento."""
+    try:
+        supabase.table('pagamentos_pix').update({
+            'guild_id': guild_id
+        }).eq('pix_id', pix_id).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Erro ao atualizar guild do pagamento: {e}")
+        return False
+
+
 async def ativar_assinatura_servidor(guild_id: str, plano_id: int, pagador_discord_id: str = None) -> bool:
     """Ativa assinatura do servidor após pagamento confirmado."""
     try:

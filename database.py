@@ -714,15 +714,16 @@ async def criar_pagamento_pix(guild_id: str, plano_id: int, valor: float) -> Opt
 
 
 async def buscar_pagamento_pendente_usuario(discord_id: str) -> Optional[Dict]:
-    """Busca pagamento pendente mais recente do usuário (independente da guild)."""
+    """Busca pagamento mais recente do usuário (pendente ou pago)."""
     try:
+        # Pega o último pagamento criado, seja pendente ou já pago (para recuperar falhas de webhook)
         response = supabase.table('pagamentos_pix').select('*').eq(
             'discord_id', discord_id
-        ).eq('status', 'pendente').order('created_at', desc=True).limit(1).execute()
+        ).in_('status', ['pendente', 'pago']).order('created_at', desc=True).limit(1).execute()
         
         return response.data[0] if response.data else None
     except Exception as e:
-        logger.error(f"Erro ao buscar pagamento pendente usuário: {e}")
+        logger.error(f"Erro ao buscar pagamento usuário: {e}")
         return None
 
 

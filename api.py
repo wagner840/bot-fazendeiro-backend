@@ -220,12 +220,13 @@ async def handle_webhook(request: Request, asaas_access_token: Optional[str] = H
     """Handles Asaas Webhooks."""
     
     # 1. Security Verification
-    if ASAAS_WEBHOOK_TOKEN and asaas_access_token != ASAAS_WEBHOOK_TOKEN:
+    if not ASAAS_WEBHOOK_TOKEN:
+        logger.critical("SECURITY ALERT: ASAAS_WEBHOOK_TOKEN not configured! Rejecting webhook.")
+        raise HTTPException(status_code=500, detail="Server misconfiguration: Webhook Token missing")
+
+    if asaas_access_token != ASAAS_WEBHOOK_TOKEN:
         logger.warning(f"Unauthorized Webhook attempt. Token: {asaas_access_token}")
         raise HTTPException(status_code=401, detail="Unauthorized")
-    
-    if not ASAAS_WEBHOOK_TOKEN:
-        logger.warning("ASAAS_WEBHOOK_TOKEN not set! Webhook is INSECURE.")
 
     try:
         data = await request.json()
@@ -239,57 +240,104 @@ async def handle_webhook(request: Request, asaas_access_token: Optional[str] = H
 
         payment_id = payment.get('id')
         
-        if event == 'PAYMENT_RECEIVED' or event == 'PAYMENT_CONFIRMED':
-            logger.info(f"Payment confirmed: {payment_id}")
-            
-            # Update Payment Status
-            supabase.table('pagamentos_pix').update({'status': 'pago'}).eq('pix_id', payment_id).execute()
-            
-            # Get payment details to activate subscription
-            pay_record = supabase.table('pagamentos_pix').select('*').eq('pix_id', payment_id).single().execute()
-            
-            if pay_record.data:
-                guild_id = pay_record.data['guild_id']
-                plano_id = pay_record.data['plano_id']
-                
-                # Fetch plan duration
-                plano = supabase.table('planos').select('*').eq('id', plano_id).single().execute()
-                days = plano.data['duracao_dias']
-                
-                # Update/Create Subscription
-                expiration = (datetime.datetime.now() + datetime.timedelta(days=days)).isoformat()
-                
-                # Check if exists
-                existing = supabase.table('assinaturas').select('*').eq('guild_id', guild_id).execute()
-                
-                if existing.data:
-                    # Update
-                    supabase.table('assinaturas').update({
-                        'plano_id': plano_id,
-                        'data_inicio': datetime.datetime.now().isoformat(),
-                        'data_expiracao': expiration,
-                        'status': 'ativa',
-                        'pagamento_status': 'pago'
-                    }).eq('guild_id', guild_id).execute()
-                    logger.info(f"Subscription updated for guild {guild_id}")
-                else:
-                    # Create
-                    supabase.table('assinaturas').insert({
-                        'guild_id': guild_id,
-                        'plano_id': plano_id,
-                        'data_inicio': datetime.datetime.now().isoformat(),
-                        'data_expiracao': expiration,
-                        'status': 'ativa',
-                        'pagamento_status': 'pago'
-                    }).execute()
-                    logger.info(f"Subscription created for guild {guild_id}")
-                
-                return {"status": "success", "action": "subscription_activated"}
-            else:
-                logger.error(f"Payment record not found for webhook payment_id: {payment_id}")
+        if event in ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED']:
+            await process_payment_confirmation(payment_id)
+            return {"status": "success", "action": "subscription_activated"}
 
         return {"status": "received", "event": event}
 
     except Exception as e:
         logger.error(f"Webhook Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/pix/verify/{payment_id}")
+async def verify_payment_endpoint(payment_id: str):
+    """
+    Active Payment Verification Endpoint.
+    Checks status in Asaas and updates DB if Paid.
+    """
+    logger.info(f"Manual verification requested for: {payment_id}")
+    
+    # 1. Check local status first
+    try:
+        local_record = supabase.table('pagamentos_pix').select('*').eq('pix_id', payment_id).single().execute()
+        if not local_record.data:
+            raise HTTPException(status_code=404, detail="Payment not found")
+        
+        if local_record.data['status'] == 'pago':
+             return {"status": "pago", "message": "Payment already confirmed"}
+    except Exception as e:
+        logger.error(f"DB Error: {e}")
+        raise HTTPException(status_code=500, detail="Database Error")
+
+    # 2. Check Asaas API
+    if not ASAAS_API_KEY:
+        # Dev/Localhost Fallback: If no API key, we trust the polling if status is 'pago' (which we checked above)
+        # OR we simulate success if requested for dev
+        logger.warning("No Asaas API Key, cannot verify remotely.")
+        return {"status": "pending", "message": "Cannot verify remotely without API Key"}
+
+    current_asaas_url = os.getenv('ASAAS_API_URL', "https://sandbox.asaas.com/api/v3")
+    headers = {"access_token": ASAAS_API_KEY}
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"{current_asaas_url}/payments/{payment_id}", headers=headers) as resp:
+            if resp.status == 200:
+                payment_data = await resp.json()
+                status = payment_data.get('status')
+                
+                if status in ['RECEIVED', 'CONFIRMED']:
+                    # Active Confirmation!
+                    await process_payment_confirmation(payment_id)
+                    return {"status": "pago", "message": "Payment confirmed and subscription activated"}
+                else:
+                    return {"status": status.lower(), "message": f"Payment status is {status}"}
+            else:
+                raise HTTPException(status_code=resp.status, detail="Error communicating with payment provider")
+
+
+async def process_payment_confirmation(payment_id: str):
+    """Core logic to activate subscription from a confirmed payment."""
+    logger.info(f"Processing confirmation for: {payment_id}")
+    
+    # Update Payment Status
+    supabase.table('pagamentos_pix').update({'status': 'pago'}).eq('pix_id', payment_id).execute()
+    
+    # Get payment details
+    pay_record = supabase.table('pagamentos_pix').select('*').eq('pix_id', payment_id).single().execute()
+    
+    if pay_record.data:
+        guild_id = pay_record.data['guild_id']
+        plano_id = pay_record.data['plano_id']
+        
+        # Guard clause for pending activation
+        if guild_id == 'pending_activation':
+            logger.warning(f"Payment {payment_id} is paid but has no guild linked yet.")
+            return
+
+        # Fetch plan duration
+        plano = supabase.table('planos').select('*').eq('id', plano_id).single().execute()
+        days = plano.data['duracao_dias']
+        
+        # Calculate expiration (Idempotency check could go here)
+        expiration = (datetime.datetime.now() + datetime.timedelta(days=days)).isoformat()
+        
+        # Update/Create Subscription
+        existing = supabase.table('assinaturas').select('*').eq('guild_id', guild_id).execute()
+        
+        subscription_data = {
+            'plano_id': plano_id,
+            'data_inicio': datetime.datetime.now().isoformat(),
+            'data_expiracao': expiration,
+            'status': 'ativa',
+            'pagamento_status': 'pago'
+        }
+
+        if existing.data:
+            supabase.table('assinaturas').update(subscription_data).eq('guild_id', guild_id).execute()
+            logger.info(f"Subscription updated for guild {guild_id}")
+        else:
+            subscription_data['guild_id'] = guild_id
+            supabase.table('assinaturas').insert(subscription_data).execute()
+            logger.info(f"Subscription created for guild {guild_id}")

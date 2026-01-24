@@ -306,17 +306,16 @@ class Assinatura(commands.Cog):
             # Se 'pendente', consultamos a API do Asaas
             await ctx.send("🌐 Consultando Banco Central/Asaas para confirmação...")
             
-            current_asaas_url = os.getenv('ASAAS_API_URL', "https://sandbox.asaas.com/api/v3")
+            from config import ASAAS_API_URL
             headers = {"access_token": ASAAS_API_KEY}
             
             if not ASAAS_API_KEY:
-                # Fallback para Dev
-                await ctx.send("⚠️ API Key não configurada. Modo Dev: Validando automaticamente.")
-                status_real = 'CONFIRMED'
+                await ctx.send("❌ API Key não configurada. Não é possível validar pagamento.")
+                return
             else:
                 try:
                     async with aiohttp.ClientSession() as session:
-                        async with session.get(f"{current_asaas_url}/payments/{pix_id}", headers=headers) as resp:
+                        async with session.get(f"{ASAAS_API_URL}/payments/{pix_id}", headers=headers) as resp:
                             if resp.status == 200:
                                 data = await resp.json()
                                 status_real = data.get('status')

@@ -17,20 +17,14 @@ load_dotenv()
 
 # Configuration
 # Configuration
-ASAAS_API_KEY = os.getenv('ASAAS_API_KEY')
-ASAAS_WEBHOOK_TOKEN = os.getenv('ASAAS_WEBHOOK_TOKEN')  # Ensure this is set in .env
+from config import ASAAS_API_KEY, ASAAS_API_URL, ASAAS_WEBHOOK_TOKEN, supabase, SUPABASE_URL
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
 if ASAAS_API_KEY:
     logger.info(f"ASAAS_API_KEY loaded. Length: {len(ASAAS_API_KEY)}")
+    logger.info(f"Using Asaas API URL: {ASAAS_API_URL}")
 else:
-    logger.critical("ASAAS_API_KEY NOT loaded. Production mode requires API Key.")
-
-# Default to Production URL
-ASAAS_API_URL = "https://api.asaas.com/v3"
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY') 
-
+    logger.warning("ASAAS_API_KEY NOT loaded.")
 # Initialize clients
 app = FastAPI()
 
@@ -78,8 +72,8 @@ async def create_pix_charge(req: PixChargeRequest):
         logger.error("Asaas API Key missing during charge creation.")
         raise HTTPException(status_code=500, detail="Asaas API Key not configured")
 
-    # Production URL
-    current_asaas_url = os.getenv('ASAAS_API_URL', "https://api.asaas.com/v3")
+    # Use central production URL
+    current_asaas_url = ASAAS_API_URL
 
     headers = {
         "access_token": ASAAS_API_KEY,
@@ -277,7 +271,7 @@ async def verify_payment_endpoint(payment_id: str):
         logger.warning("No Asaas API Key, cannot verify remotely.")
         return {"status": "pending", "message": "Cannot verify remotely without API Key"}
 
-    current_asaas_url = os.getenv('ASAAS_API_URL', "https://api.asaas.com/v3")
+    current_asaas_url = ASAAS_API_URL
     headers = {"access_token": ASAAS_API_KEY}
 
     async with aiohttp.ClientSession() as session:

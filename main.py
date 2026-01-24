@@ -151,7 +151,7 @@ async def on_command_error(ctx, error):
 
 @bot.command(name='help', aliases=['ajuda', 'comandos'])
 async def ajuda(ctx):
-    """Mostra todos os comandos."""
+    """Mostra todos os comandos disponíveis categorizados."""
     guild_id = str(ctx.guild.id)
     empresas = await get_empresas_by_guild(guild_id)
     
@@ -164,56 +164,63 @@ async def ajuda(ctx):
 
     embed = discord.Embed(
         title="🏢 Bot Multi-Empresa Downtown",
-        description=f"**Empresa(s):** {nome_empresa}\nVersão: 2.1 (Pagamentos & Admins)",
-        color=discord.Color.green()
+        description=f"**Empresa(s):** {nome_empresa}\nVersão: 2.5 (Produção & Encomendas)",
+        color=discord.Color.blue()
     )
 
-    if not empresas:
-        embed.add_field(
-            name="⚙️ Configuração",
-            value="`!configurar` - Configurar primeira empresa (Admin)",
-            inline=False
-        )
-    else:
-        embed.add_field(
-            name="⚙️ Configuração Geral (Admin)",
-            value="`!configurar` - Ver empresa\n`!novaempresa` - Adicionar empresa\n`!modopagamento` - Configurar Pagamento (Prod/Entrega/Estoque)\n`!limparcache` - Recarregar bot",
-            inline=False
-        )
+    # 1. GERAL
+    embed.add_field(
+        name="ℹ️ Geral",
+        value="`!empresa` - Ver informações da empresa\n"
+              "`!assinatura` - Ver status da assinatura\n"
+              "`!planos` - Ver planos disponíveis\n"
+              "`!assinarpix` - Gerar link de pagamento",
+        inline=False
+    )
 
-        embed.add_field(
-            name="💲 Config. de Preços (Admin)",
-            value="`!configmin` - Preços MÍNIMOS\n`!configmedio` - Preços MÉDIOS\n`!configmax` - Preços MÁXIMOS\n`!configurarprecos` - Manual",
-            inline=False
-        )
+    # 2. PRODUÇÃO
+    embed.add_field(
+        name="🏭 Produção & Encomendas",
+        value="`!add [produto] [qtd]` - Adicionar ao estoque (Fabricar)\n"
+              "`!estoque` - Ver seu estoque e saldo\n"
+              "`!produtos` - Ver catálogo de códigos e produtos\n"
+              "`!novaencomenda` - Criar nova encomenda (Menu ou Rápido)\n"
+              "`!encomendas` - Ver encomendas pendentes\n"
+              "`!entregar [ID]` - Entregar encomenda para cliente\n"
+              "`!deletar [codigo]` - Jogar fora/remover do estoque\n"
+              "`!verprecos` - Ver tabela de preços completa",
+        inline=False
+    )
 
-        embed.add_field(
-            name="👥 Gestão de Usuários (Admin)",
-            value="`!bemvindo @pessoa` - Criar canal privado (Admin=admin-nome)\n`!usuarios` - Listar usuários frontend\n`!promover @pessoa` - Promover Admin\n`!removeracesso` - Remover acesso",
-            inline=False
-        )
+    # 3. ADMINISTRAÇÃO
+    embed.add_field(
+        name="🛡️ Administração (Requer permissão)",
+        value="`!configurar` - Configuração inicial da empresa\n"
+              "`!novaempresa` - Adicionar outra empresa no servidor\n"
+              "`!modopagamento` - Definir Produção (Acumulativo) ou Entrega (Comissão)\n"
+              "`!configmin` / `!configmedio` / `!configmax` - Configurar preços auto\n"
+              "`!configurarprecos` - Configurar preços manualmente\n"
+              "`!comissao [%]` - Definir porcentagem de comissão (ex: 30%)\n"
+              "`!usuarios` - Listar equipe cadastrada\n"
+              "`!bemvindo @pessoa` - Criar cadastro e canal privado\n"
+              "`!promover @pessoa` - Promover funcionário a Admin\n"
+              "`!removeracesso @pessoa` - Remover acesso ao painel\n"
+              "`!limpar [qtd]` - Limpar mensagens do chat",
+        inline=False
+    )
 
-        embed.add_field(
-            name="📦 Produção (Funcionários)",
-            value="`!add rotulo 100` ou `!add rotulo100` - Fabricar\n`!estoque` - Ver saldo e itens\n`!deletar codigo` - Jogar fora\n`!produtos` - Ver catálogo com códigos",
-            inline=False
-        )
-
-        embed.add_field(
-            name="📦 Encomendas",
-            value='`!novaencomenda` - Criar venda\n`!encomendas` - Ver pendentes\n`!entregar [ID]` - Entregar e receber',
-            inline=False
-        )
-
-        embed.add_field(
-            name="💰 Financeiro (Admin)",
-            value="`!pagar @pessoa [valor]` - Pagamento extra\n`!pagarestoque @pessoa` - Pagar e zerar estoque\n`!caixa` - Relatório financeiro",
-            inline=False
-        )
+    # 4. FINANCEIRO
+    embed.add_field(
+        name="💰 Financeiro (Admin)",
+        value="`!caixa` - Relatório financeiro geral (Saldos + Estoques)\n"
+              "`!pagar @pessoa [valor]` - Pagamento avulso/bônus\n"
+              "`!pagarestoque @pessoa` - Pagar comissão acumulada e zerar estoque",
+        inline=False
+    )
 
     embed.add_field(
         name="🌐 Painel Web",
-        value="Gerencie tudo pelo painel web usando seu Discord!",
+        value="Gerencie tudo pelo painel web: [Clique Aqui](http://localhost:3000)",
         inline=False
     )
 

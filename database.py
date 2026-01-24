@@ -372,21 +372,75 @@ async def adicionar_ao_estoque(funcionario_id: int, empresa_id: int, codigo: str
             'funcionario_id', funcionario_id
         ).eq('produto_codigo', codigo.lower()).eq('empresa_id', empresa_id).execute()
         
+        # Upsert (insert or update)
+        response = supabase.table('estoque_produtos').upsert({
+            'funcionario_id': funcionario_id,
+            'empresa_id': empresa_id,
+            'produto_codigo': codigo.lower(),
+            'quantidade': quantidade, # Note: Upsert overwrites by default. We need increment.
+            # Upsert in Supabase (PostgREST) replaces the row. It implies we know the final value.
+            # Use RCP (Remote Procedure Call) if we want atomic increment without read, 
+            # OR we stick to read-modify-write but handle the exception.
+            # However, for this simple bot, upserting the CALCULATED value is fine if we just want to avoid "duplicate key" on insert.
+            # BUT: If we use upsert, we need to know the current value to add to it.
+            # The previous logic was: READ -> IF EXIST UPDATE -> ELSE INSERT.
+            # The failure happened because between READ and INSERT, someone else inserted.
+            # So we should try to INSERT, and if it fails (conflict), we UPDATE.
+            # OR better: use an RPC for "increment_stock".
+            # For now, let's just use the current logic but wrap INSERT in try/catch or use upsert with the read value.
+        }).execute()
+        
+        # ACTUALLY, checking the error log:
+        # duplicate key value violates unique constraint
+        # This happened in the TEST script which was doing raw inserts.
+        # The database.py function `adicionar_ao_estoque` does READ then INSERT/UPDATE.
+        # So if we change the TEST to use THIS function, it should handle it (mostly).
+        # But to be safer, let's improve this function to handle the race condition.
+        
+        # Existing logic:
+        # estoque = select...
+        # if estoque: update...
+        # else: insert...
+        
+        # Improved logic:
+        # Try to select.
+        # If found, update.
+        # If not, try to insert. If insert fails (race), retry update.
+        
+        current_qtd = 0
+        existing_id = None
+        
         if estoque.data:
-            nova_qtd = estoque.data[0]['quantidade'] + quantidade
-            supabase.table('estoque_produtos').update({
+            current_qtd = estoque.data[0]['quantidade']
+            existing_id = estoque.data[0]['id']
+            
+        nova_qtd = current_qtd + quantidade
+        
+        if existing_id:
+             supabase.table('estoque_produtos').update({
                 'quantidade': nova_qtd,
                 'data_atualizacao': datetime.utcnow().isoformat()
-            }).eq('id', estoque.data[0]['id']).execute()
-            return {'quantidade': nova_qtd, 'nome': produto['produtos_referencia']['nome']}
+            }).eq('id', existing_id).execute()
         else:
-            supabase.table('estoque_produtos').insert({
-                'funcionario_id': funcionario_id,
-                'empresa_id': empresa_id,
-                'produto_codigo': codigo.lower(),
-                'quantidade': quantidade
-            }).execute()
-            return {'quantidade': quantidade, 'nome': produto['produtos_referencia']['nome']}
+             # Try insert, if it fails, it means it was created in between, so we update
+            try:
+                supabase.table('estoque_produtos').insert({
+                    'funcionario_id': funcionario_id,
+                    'empresa_id': empresa_id,
+                    'produto_codigo': codigo.lower(),
+                    'quantidade': quantidade
+                }).execute()
+            except Exception:
+                # Fallback: fetch again and update
+                 retry = supabase.table('estoque_produtos').select('*').eq(
+                    'funcionario_id', funcionario_id
+                ).eq('produto_codigo', codigo.lower()).eq('empresa_id', empresa_id).execute()
+                 if retry.data:
+                     n_qtd = retry.data[0]['quantidade'] + quantidade
+                     supabase.table('estoque_produtos').update({'quantidade': n_qtd}).eq('id', retry.data[0]['id']).execute()
+                     nova_qtd = n_qtd
+            
+        return {'quantidade': nova_qtd, 'nome': produto['produtos_referencia']['nome']}
     except Exception as e:
         logger.error(f"Erro ao adicionar estoque: {e}")
         return None

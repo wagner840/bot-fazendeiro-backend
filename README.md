@@ -39,14 +39,15 @@ Bot Discord para gerenciamento econômico de empresas em servidores de roleplay 
 
 ```
 ├── main.py           # Bot principal
+├── api.py            # API & Webhooks
 ├── .env              # Configurações (não commitar)
-├── requirements.txt  # Dependências Python
-├── docs/             # Documentação
+├── docs/             # Documentação & Codemaps
+│   ├── CODEMAPS/     # <--- Mapas Arquiteturais
 │   ├── DOCUMENTACAO_BOT.md
-│   ├── TUTORIAL_BOT.md
-│   └── schema.sql
-├── data/             # Dados de referência
-└── frontend/         # Frontend React
+│   └── ...
+├── cogs/             # Módulos do Bot
+├── frontend/         # Frontend React
+└── data/             # Dados de referência
 ```
 
 ## 🔧 Comandos Principais
@@ -58,6 +59,14 @@ Bot Discord para gerenciamento econômico de empresas em servidores de roleplay 
 | `!comissao 30` | Define comissão funcionários 30% |
 | `!verprecos` | Ver preços configurados |
 | `!help` | Lista todos os comandos |
+
+## 🏗️ Arquitetura
+
+Veja os mapas arquiteturais detalhados em [docs/CODEMAPS/INDEX.md](docs/CODEMAPS/INDEX.md).
+
+- [Backend Codemap](docs/CODEMAPS/backend.md)
+- [Frontend Codemap](docs/CODEMAPS/frontend.md)
+- [Integrations Codemap](docs/CODEMAPS/integrations.md)
 
 ## 📖 Documentação
 

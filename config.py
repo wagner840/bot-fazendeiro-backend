@@ -32,8 +32,11 @@ if not all([DISCORD_TOKEN, SUPABASE_URL, KEY_TO_USE]):
 # Cliente Supabase
 supabase: Client = create_client(SUPABASE_URL, KEY_TO_USE)
 
-# Regex para parsing de produtos (ex: pa2, va10, gp5)
-PRODUTO_REGEX = re.compile(r'([a-zA-Z_]+)(\d+)')
+# Configurações do Asaas
+ASAAS_API_KEY = os.getenv('ASAAS_API_KEY')
+# Prioriza URL de produção se não for especificada
+ASAAS_API_URL = os.getenv('ASAAS_API_URL', "https://www.asaas.com/api/v3")
+ASAAS_WEBHOOK_TOKEN = os.getenv('ASAAS_WEBHOOK_TOKEN')
 
 # Caches globais
 empresas_cache = {}

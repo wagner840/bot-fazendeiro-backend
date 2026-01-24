@@ -18,7 +18,9 @@ from database import (
     get_produtos_empresa,
     get_funcionario_by_discord_id,
     get_estoque_funcionario,
-    get_produtos_referencia
+    get_produtos_referencia,
+    adicionar_ao_estoque,
+    remover_do_estoque
 )
 
 # ============================================
@@ -165,28 +167,15 @@ async def test_operacoes_estoque(func_id, empresa_id, produto_codigo):
 
     # Adicionar ao estoque
     info("Adicionando 10 itens ao estoque...")
-
-    # Verifica se ja existe
-    existing = supabase.table('estoque_produtos').select('*').eq(
-        'funcionario_id', func_id
-    ).eq('empresa_id', empresa_id).eq('produto_codigo', produto_codigo).execute()
-
-    if existing.data:
-        # Atualiza quantidade
-        nova_qtd = existing.data[0]['quantidade'] + 10
-        supabase.table('estoque_produtos').update({
-            'quantidade': nova_qtd
-        }).eq('id', existing.data[0]['id']).execute()
-        ok(f"Estoque atualizado: {nova_qtd} itens")
+    
+    # Usa a funcao do banco de dados (que agora usa upsert)
+    result = await adicionar_ao_estoque(func_id, empresa_id, produto_codigo, 10)
+    
+    if result:
+         ok(f"Estoque atualizado: {result['quantidade']} itens")
     else:
-        # Insere novo
-        supabase.table('estoque_produtos').insert({
-            'funcionario_id': func_id,
-            'empresa_id': empresa_id,
-            'produto_codigo': produto_codigo,
-            'quantidade': 10
-        }).execute()
-        ok("10 itens adicionados ao estoque")
+         fail("Erro ao adicionar ao estoque")
+         return False
 
     # Verifica
     estoque = supabase.table('estoque_produtos').select('*').eq(
@@ -198,11 +187,13 @@ async def test_operacoes_estoque(func_id, empresa_id, produto_codigo):
 
     # Remove do estoque
     info("Removendo 5 itens...")
-    nova_qtd = estoque.data[0]['quantidade'] - 5
-    supabase.table('estoque_produtos').update({
-        'quantidade': nova_qtd
-    }).eq('id', estoque.data[0]['id']).execute()
-    ok(f"Estoque apos remocao: {nova_qtd} itens")
+    res_remove = await remover_do_estoque(func_id, empresa_id, produto_codigo, 5)
+    
+    if res_remove:
+         ok(f"Estoque apos remocao: {res_remove['quantidade']} itens")
+    else:
+         fail("Erro ao remover do estoque")
+         return False
 
     return True
 

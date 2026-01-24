@@ -44,7 +44,6 @@ class ProducaoCog(commands.Cog, name="Produção"):
             return
 
         # Verifica se é Admin (isento de comissão)
-        from config import supabase
         eh_admin = False
         try:
             # Verifica na tabela de usuarios_frontend se tem role admin/superadmin nessa guild

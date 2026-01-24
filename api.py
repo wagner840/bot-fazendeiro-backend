@@ -16,17 +16,18 @@ from logging_config import logger
 load_dotenv()
 
 # Configuration
-ASAAS_API_KEY = os.getenv('ASAAS_API_KEY') or os.getenv('ASAAS_SANDBOX_API_KEY')
+# Configuration
+ASAAS_API_KEY = os.getenv('ASAAS_API_KEY')
 ASAAS_WEBHOOK_TOKEN = os.getenv('ASAAS_WEBHOOK_TOKEN')  # Ensure this is set in .env
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
 if ASAAS_API_KEY:
     logger.info(f"ASAAS_API_KEY loaded. Length: {len(ASAAS_API_KEY)}")
 else:
-    logger.warning("ASAAS_API_KEY NOT loaded.")
-    logger.info(f"Available Env Vars: {list(os.environ.keys())}") # DEBUG: List all keys
+    logger.critical("ASAAS_API_KEY NOT loaded. Production mode requires API Key.")
 
-ASAAS_API_URL = "https://sandbox.asaas.com/api/v3"
+# Default to Production URL
+ASAAS_API_URL = "https://api.asaas.com/v3"
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY') 
 
@@ -66,7 +67,7 @@ class WebhookEvent(BaseModel):
 
 @app.get("/")
 async def root():
-    return {"status": "online", "service": "Bot Fazendeiro API"}
+    return {"status": "online", "service": "Bot Fazendeiro API (Production)"}
 
 @app.post("/api/pix/create")
 async def create_pix_charge(req: PixChargeRequest):
@@ -77,10 +78,8 @@ async def create_pix_charge(req: PixChargeRequest):
         logger.error("Asaas API Key missing during charge creation.")
         raise HTTPException(status_code=500, detail="Asaas API Key not configured")
 
-    # Determine API URL dynamically or fallback to Sandbox
-    # Priority: Env Var > Default Sandbox
-    # Note: User can set ASAAS_API_URL in .env to https://api.asaas.com/api/v3 for production
-    current_asaas_url = os.getenv('ASAAS_API_URL', "https://sandbox.asaas.com/api/v3")
+    # Production URL
+    current_asaas_url = os.getenv('ASAAS_API_URL', "https://api.asaas.com/v3")
 
     headers = {
         "access_token": ASAAS_API_KEY,
@@ -278,7 +277,7 @@ async def verify_payment_endpoint(payment_id: str):
         logger.warning("No Asaas API Key, cannot verify remotely.")
         return {"status": "pending", "message": "Cannot verify remotely without API Key"}
 
-    current_asaas_url = os.getenv('ASAAS_API_URL', "https://sandbox.asaas.com/api/v3")
+    current_asaas_url = os.getenv('ASAAS_API_URL', "https://api.asaas.com/v3")
     headers = {"access_token": ASAAS_API_KEY}
 
     async with aiohttp.ClientSession() as session:

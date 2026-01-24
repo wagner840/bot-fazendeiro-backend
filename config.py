@@ -14,6 +14,9 @@ load_dotenv()
 # Configurações do Discord
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 
+# Configurações do Asaas
+ASAAS_API_KEY = os.getenv('ASAAS_API_KEY')
+
 # Configurações do Supabase
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')

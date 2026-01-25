@@ -1,8 +1,3 @@
-"""
-Bot Multi-Empresa Downtown - Cog de Produção
-Comandos para gerenciamento de estoque, produtos e encomendas.
-"""
-
 from datetime import datetime
 from decimal import Decimal
 import discord
@@ -15,23 +10,16 @@ from database import (
     adicionar_ao_estoque,
     remover_do_estoque,
     get_estoque_funcionario,
-    get_estoque_global
+    get_estoque_global,
+    criar_encomenda
 )
 from utils import empresa_configurada, selecionar_empresa
+from ui_utils import create_success_embed, create_error_embed, create_info_embed, handle_interaction_error
 from logging_config import logger
 
-
-class ProducaoCog(commands.Cog, name="Produção"):
-    """Comandos de gerenciamento de produção, estoque e encomendas."""
-
-    def __init__(self, bot):
-        self.bot = bot
-
-    # ============================================
-    # ESTOQUE - ADICIONAR
-    # ============================================
-
-from ui_utils import create_success_embed, create_error_embed, create_info_embed, handle_interaction_error
+# ============================================
+# UI COMPONENTS - PRODUÇÃO
+# ============================================
 
 class ProducaoModal(discord.ui.Modal, title="Registrar Produção"):
     def __init__(self, produto_codigo: str, produto_nome: str, produto_preco: float, empresa_id: int, func_id: int, eh_admin: bool):
@@ -64,19 +52,15 @@ class ProducaoModal(discord.ui.Modal, title="Registrar Produção"):
             )
             return
 
-        # Lógica de Adição (Idêntica à original)
         resultado = await adicionar_ao_estoque(self.func_id, self.empresa_id, self.produto_codigo, qty)
         
         if resultado:
-            # Cálculo de Comissão
             if self.eh_admin:
-                comissao = Decimal('0')
                 txt_comissao = "Isento (Admin)"
             else:
                 comissao = Decimal(str(self.produto_preco)) * qty
                 txt_comissao = f"💰 Acumulado: R$ {comissao:.2f}"
             
-            # Embed de Sucesso
             embed = create_success_embed("Produção Registrada!")
             embed.add_field(name=f"🏭 {self.produto_nome}", value=f"+{qty} (Total: {resultado['quantidade']})\n{txt_comissao}", inline=False)
             
@@ -90,7 +74,6 @@ class ProducaoModal(discord.ui.Modal, title="Registrar Produção"):
 class ProducaoSelect(discord.ui.Select):
     def __init__(self, produtos: dict, empresa_id: int, func_id: int, eh_admin: bool):
         options = []
-        # Limita a 25 opções (limite do Discord)
         for codigo, p in list(produtos.items())[:25]:
             nome = p['produtos_referencia']['nome']
             preco = p['preco_pagamento_funcionario']
@@ -123,130 +106,280 @@ class ProducaoView(discord.ui.View):
         self.add_item(ProducaoSelect(produtos, empresa_id, func_id, eh_admin))
 
 # ============================================
-# ESTOQUE - PRODUZIR (NOVO)
+# UI COMPONENTS - ESTOQUE & DELETE
 # ============================================
+
+class DeleteConfirmModal(discord.ui.Modal, title="Confirmar Exclusão"):
+    def __init__(self, codigo, func_id, empresa_id):
+        super().__init__()
+        self.codigo = codigo
+        self.func_id = func_id
+        self.empresa_id = empresa_id
+        
+        self.qtd = discord.ui.TextInput(label="Quantidade a descartar", placeholder="Digite o número ou 'tudo'", required=True)
+        self.add_item(self.qtd)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            qtd_str = self.qtd.value.lower()
+            if qtd_str == 'tudo':
+                await interaction.response.send_message("Por favor, digite a quantidade numérica específica.", ephemeral=True)
+                return
+
+            quantidade = int(qtd_str)
+            if quantidade <= 0: raise ValueError
+            
+            res = await remover_do_estoque(self.func_id, self.empresa_id, self.codigo, quantidade)
+            if res and 'removido' in res:
+                embed = create_success_embed("Item Removido", f"-{res['removido']} {res['nome']}\nRestante: {res['quantidade']}")
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                await interaction.response.send_message("❌ Erro ao remover ou estoque insuficiente.", ephemeral=True)
+        except ValueError:
+            await interaction.response.send_message("❌ Quantidade inválida.", ephemeral=True)
+
+class DeleteSelect(discord.ui.Select):
+    def __init__(self, estoque, func_id, empresa_id):
+        self.func_id = func_id
+        self.empresa_id = empresa_id
+        options = []
+        for item in estoque[:25]:
+            label = f"{item['nome']} ({item['quantidade']}x)"
+            options.append(discord.SelectOption(label=label, value=item['produto_codigo'], description="Clique para excluir"))
+        
+        super().__init__(placeholder="Selecione o item para JOGAR FORA...", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        codigo = self.values[0]
+        await interaction.response.send_modal(DeleteConfirmModal(codigo, self.func_id, self.empresa_id))
+
+class InventoryView(discord.ui.View):
+    def __init__(self, ctx, estoque, func_id, empresa_id):
+        super().__init__(timeout=120)
+        self.ctx = ctx
+        self.estoque = estoque
+        self.func_id = func_id
+        self.empresa_id = empresa_id
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        return interaction.user == self.ctx.author
+
+    @discord.ui.button(label="🗑️ Jogar Fora (Deletar)", style=discord.ButtonStyle.danger, row=1)
+    async def delete_mode(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.estoque:
+            await interaction.response.send_message("❌ Estoque vazio.", ephemeral=True)
+            return
+        
+        view = discord.ui.View(timeout=60)
+        view.add_item(DeleteSelect(self.estoque, self.func_id, self.empresa_id))
+        await interaction.response.send_message("Selecione o item para excluir:", view=view, ephemeral=True)
+
+# ============================================
+# UI COMPONENTS - ENCOMENDAS
+# ============================================
+
+class OrderQtyModal(discord.ui.Modal, title="Quantidade do Item"):
+    def __init__(self, builder_view, produto_codigo, produto_nome, preco):
+        super().__init__()
+        self.builder_view = builder_view
+        self.produto_codigo = produto_codigo
+        self.produto_nome = produto_nome
+        self.preco = preco
+
+        self.qty = discord.ui.TextInput(
+            label=f"Qtd de {produto_nome}",
+            placeholder="Ex: 50",
+            min_length=1, max_length=5, required=True
+        )
+        self.add_item(self.qty)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            qtd = int(self.qty.value)
+            if qtd <= 0: raise ValueError
+        except:
+            await interaction.response.send_message(embed=create_error_embed("Erro", "Quantidade inválida."), ephemeral=True)
+            return
+
+        await self.builder_view.add_to_cart(interaction, self.produto_codigo, self.produto_nome, qtd, self.preco)
+
+class ProductSelectOrder(discord.ui.Select):
+    def __init__(self, builder_view, produtos):
+        options = []
+        for codigo, p in list(produtos.items())[:25]:
+            nome = p['produtos_referencia']['nome']
+            preco = p['preco_venda']
+            options.append(discord.SelectOption(
+                label=f"{nome}", 
+                value=codigo, 
+                description=f"R$ {preco:.2f}",
+                emoji="📦"
+            ))
+        super().__init__(placeholder="Selecione um produto para adicionar...", options=options)
+        self.builder_view = builder_view
+        self.produtos = produtos
+
+    async def callback(self, interaction: discord.Interaction):
+        codigo = self.values[0]
+        prod = self.produtos[codigo]
+        await interaction.response.send_modal(
+            OrderQtyModal(
+                self.builder_view, codigo, 
+                prod['produtos_referencia']['nome'], 
+                float(prod['preco_venda'])
+            )
+        )
+
+class OrderBuilderView(discord.ui.View):
+    def __init__(self, ctx, produtos, empresa_id, func_id, comprador_nome):
+        super().__init__(timeout=300)
+        self.ctx = ctx
+        self.produtos = produtos
+        self.empresa_id = empresa_id
+        self.func_id = func_id
+        self.comprador_nome = comprador_nome
+        self.cart = []
+
+        self.add_item(ProductSelectOrder(self, produtos))
+
+    async def update_message(self, interaction: discord.Interaction):
+        total = sum(i['valor'] for i in self.cart)
+        
+        embed = discord.Embed(
+            title=f"📦 Nova Encomenda: {self.comprador_nome}",
+            description="Adicione itens usando o menu abaixo.",
+            color=discord.Color.blue()
+        )
+        
+        cart_text = ""
+        if not self.cart:
+            cart_text = "🛒 Carrinho vazio."
+        else:
+            for idx, item in enumerate(self.cart):
+                cart_text += f"{idx+1}. **{item['nome']}** x{item['qtd']} (R$ {item['valor']:.2f})\n"
+        
+        embed.add_field(name="Itens", value=cart_text, inline=False)
+        embed.add_field(name="💰 Total", value=f"**R$ {total:.2f}**", inline=False)
+        
+        # Find Confirm Button and Enable/Disable
+        for item in self.children:
+            if isinstance(item, discord.ui.Button) and item.label == "Finalizar Encomenda":
+                item.disabled = len(self.cart) == 0
+                break
+        
+        if interaction.response.is_done():
+            await interaction.edit_original_response(embed=embed, view=self)
+        else:
+            await interaction.response.edit_message(embed=embed, view=self)
+
+    async def add_to_cart(self, interaction: discord.Interaction, codigo, nome, qtd, preco_unit):
+        valor = Decimal(str(qtd)) * Decimal(str(preco_unit))
+        existing = next((i for i in self.cart if i['codigo'] == codigo), None)
+        if existing:
+            existing['qtd'] += qtd
+            existing['valor'] += valor
+        else:
+            self.cart.append({
+                'codigo': codigo,
+                'nome': nome,
+                'qtd': qtd,
+                'preco_unit': preco_unit,
+                'valor': valor
+            })
+        await self.update_message(interaction)
+
+    @discord.ui.button(label="Finalizar Encomenda", style=discord.ButtonStyle.green, emoji="✅", disabled=True, row=1)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.cart: return
+        itens_db = [{
+            'codigo': i['codigo'],
+            'nome': i['nome'],
+            'quantidade': i['qtd'],
+            'quantidade_entregue': 0,
+            'valor_unitario': i['preco_unit'],
+            'valor': float(i['valor'])
+        } for i in self.cart]
+        try:
+            encomenda = await criar_encomenda(
+                empresa_id=self.empresa_id,
+                comprador=self.comprador_nome,
+                itens=itens_db
+            )
+            if not encomenda: raise Exception("Erro ao criar encomenda via DB.")
+            
+            embed = create_success_embed(f"Encomenda #{encomenda['id']} Criada!", f"Cliente: {self.comprador_nome}")
+            embed.add_field(name="Total", value=f"R$ {encomenda['valor_total']:.2f}")
+            embed.set_footer(text="Use !entregar para finalizar a entrega.")
+            await interaction.response.edit_message(embed=embed, view=None)
+            self.stop()
+        except Exception as e:
+            await handle_interaction_error(interaction, e)
+
+    @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.red, emoji="❌", row=1)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=create_error_embed("Cancelado", "Encomenda cancelada."), view=None)
+        self.stop()
+
+class ClientNameModal(discord.ui.Modal, title="Nome do Cliente"):
+    def __init__(self, ctx, produtos, empresa_id, func_id):
+        super().__init__()
+        self.ctx = ctx
+        self.produtos = produtos
+        self.empresa_id = empresa_id
+        self.func_id = func_id
+
+        self.nome = discord.ui.TextInput(
+            label="Nome do Comprador",
+            placeholder="Ex: Delegacia, Hospital...",
+            min_length=3,
+            required=True
+        )
+        self.add_item(self.nome)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        view = OrderBuilderView(self.ctx, self.produtos, self.empresa_id, self.func_id, self.nome.value)
+        embed = create_info_embed(f"📦 Nova Encomenda: {self.nome.value}", "Selecione os produtos abaixo para montar o pedido.")
+        embed.add_field(name="Carrinho", value="Vazio", inline=False)
+        await interaction.response.send_message(embed=embed, view=view)
+
+# ============================================
+# COG PRINCIPAL
+# ============================================
+
+class ProducaoCog(commands.Cog, name="Produção"):
+    """Comandos de gerenciamento de produção, estoque e encomendas."""
+
+    def __init__(self, bot):
+        self.bot = bot
 
     @commands.hybrid_command(name='produzir', aliases=['add', 'fabricar'], description="Abre o menu de produção (Fabricação)")
     @empresa_configurada()
     async def produzir(self, ctx):
         """Abre o painel de produção interativo."""
+        if ctx.interaction:
+            await ctx.interaction.response.defer(ephemeral=True)
+
         empresa = await selecionar_empresa(ctx)
         if not empresa: return
 
-        # Identifica Funcionário
         func_id = await get_or_create_funcionario(str(ctx.author.id), ctx.author.display_name, empresa['id'])
         if not func_id:
             await ctx.send(embed=create_error_embed("Erro", "Erro ao identificar funcionário."), ephemeral=True)
             return
 
-        # Verifica Admin
         from utils import verificar_is_admin
         eh_admin = await verificar_is_admin(ctx, empresa)
 
-        # Busca Produtos
         produtos = await get_produtos_empresa(empresa['id'])
         if not produtos:
             await ctx.send(embed=create_error_embed("Sem Produtos", "Nenhum produto configurado na empresa."), ephemeral=True)
             return
 
-        # Envia View
         view = ProducaoView(produtos, empresa['id'], func_id, eh_admin)
         embed = create_info_embed("🏭 Painel de Produção", "Selecione o produto abaixo para registrar sua produção.")
-        
-        # Se for slash command, ephemeral=True, se for texto, normal.
-        ephemeral = True # Defaults to ephemeral for better UX
-        
-        await ctx.send(embed=embed, view=view, ephemeral=ephemeral)
+        await ctx.send(embed=embed, view=view, ephemeral=True)
 
-    # ============================================
-    # ESTOQUE - VER
-    # ============================================
-
-    # ============================================
-    # ESTOQUE - VER
-    # ============================================
-
-    # ============================================
-    # ESTOQUE & DELETAR (UI UNIFICADA)
-    # ============================================
-
-    class DeleteSelect(discord.ui.Select):
-        def __init__(self, estoque, func_id, empresa_id):
-            self.func_id = func_id
-            self.empresa_id = empresa_id
-            options = []
-            for item in estoque[:25]:
-                label = f"{item['nome']} ({item['quantidade']}x)"
-                options.append(discord.SelectOption(label=label, value=item['produto_codigo'], description="Clique para excluir tudo"))
-            
-            super().__init__(placeholder="Selecione o item para JOGAR FORA...", min_values=1, max_values=1, options=options)
-
-        async def callback(self, interaction: discord.Interaction):
-            codigo = self.values[0]
-            # Confirmação
-            await interaction.response.send_modal(ProducaoCog.DeleteConfirmModal(codigo, self.func_id, self.empresa_id, self.view))
-
-    class DeleteConfirmModal(discord.ui.Modal, title="Confirmar Exclusão"):
-        def __init__(self, codigo, func_id, empresa_id, parent_view):
-            super().__init__()
-            self.codigo = codigo
-            self.func_id = func_id
-            self.empresa_id = empresa_id
-            self.parent_view = parent_view
-            
-            self.qtd = discord.ui.TextInput(label="Quantidade a descartar", placeholder="Digite o número ou 'tudo'", required=True)
-            self.add_item(self.qtd)
-
-        async def on_submit(self, interaction: discord.Interaction):
-            try:
-                qtd_str = self.qtd.value.lower()
-                # Logic to determine quantity logic would go here, assuming simple int for now or 'tudo' logic needs helper
-                # For simplicity, we assume int. If 'tudo', we'd need to fetch stock.
-                # Let's keep it simple: Int only as per strict rules, or handle 'tudo' if simple.
-                if qtd_str == 'tudo':
-                     # Fetch stock to know total? Or delete function handles it?
-                     # database.remover_do_estoque uses specific quantity.
-                     # Let's ask for number to be safe.
-                     await interaction.response.send_message("Por favor, digite a quantidade numérica específica.", ephemeral=True)
-                     return
-
-                quantidade = int(qtd_str)
-                if quantidade <= 0: raise ValueError
-                
-                res = await remover_do_estoque(self.func_id, self.empresa_id, self.codigo, quantidade)
-                if res and 'removido' in res:
-                    embed = create_success_embed("Item Removido", f"-{res['removido']} {res['nome']}\nRestante: {res['quantidade']}")
-                    await interaction.response.send_message(embed=embed, ephemeral=True)
-                    # Ideally refresh parent view, but message update is complex here without structure refresh
-                else:
-                    await interaction.response.send_message("❌ Erro ao remover ou estoque insuficiente.", ephemeral=True)
-            except ValueError:
-                await interaction.response.send_message("❌ Quantidade inválida.", ephemeral=True)
-
-
-    class InventoryView(discord.ui.View):
-        def __init__(self, ctx, estoque, func_id, empresa_id):
-            super().__init__(timeout=120)
-            self.ctx = ctx
-            self.estoque = estoque
-            self.func_id = func_id
-            self.empresa_id = empresa_id
-
-        async def interaction_check(self, interaction: discord.Interaction):
-            return interaction.user == self.ctx.author
-
-        @discord.ui.button(label="🗑️ Jogar Fora (Deletar)", style=discord.ButtonStyle.danger, row=1)
-        async def delete_mode(self, interaction: discord.Interaction, button: discord.ui.Button):
-            if not self.estoque:
-                await interaction.response.send_message("❌ Estoque vazio.", ephemeral=True)
-                return
-            
-            # Switch view to Delete Mode
-            view = discord.ui.View(timeout=60)
-            view.add_item(ProducaoCog.DeleteSelect(self.estoque, self.func_id, self.empresa_id))
-            await interaction.response.send_message("Selecione o item para excluir:", view=view, ephemeral=True)
-
-    @commands.command(name='estoque', aliases=['2', 'veranimais', 'meuestoque'])
+    @commands.hybrid_command(name='estoque', aliases=['2', 'veranimais', 'meuestoque'], description="Mostra seu estoque pessoal.")
     @empresa_configurada()
     async def ver_estoque(self, ctx, membro: discord.Member = None):
         """Mostra estoque do funcionário (Menu Interativo)."""
@@ -287,13 +420,11 @@ class ProducaoView(discord.ui.View):
             else:
                  embed.add_field(name="💰 Valor Potencial", value=f"R$ {total_valor:.2f}", inline=False)
 
-        # Only Show View (Delete Button) if viewing own stock
         view = None
         if target == ctx.author and estoque:
-            view = self.InventoryView(ctx, estoque, func['id'], empresa['id'])
+            view = InventoryView(ctx, estoque, func['id'], empresa['id'])
 
         await ctx.send(embed=embed, view=view)
-
 
     @commands.command(name='deletar', aliases=['3', 'remover'])
     @empresa_configurada()
@@ -301,306 +432,54 @@ class ProducaoView(discord.ui.View):
         """Atalho para abrir o menu de deleção via estoque."""
         await self.ver_estoque(ctx)
 
-
-    # ============================================
-    # ESTOQUE GLOBAL
-    # ============================================
-
     @commands.command(name='estoqueglobal', aliases=['verestoque', 'producao'])
     @empresa_configurada()
     async def ver_estoque_global(self, ctx):
         """Mostra estoque global da empresa."""
         empresa = await selecionar_empresa(ctx)
-        if not empresa:
-            return
-        estoque = await get_estoque_global(empresa['id'])
+        if not empresa: return
         
-        embed = discord.Embed(
-            title=f"🏢 Estoque Global - {empresa['nome']}",
-            color=discord.Color.gold()
-        )
+        estoque = await get_estoque_global(empresa['id'])
+        embed = discord.Embed(title=f"🏢 Estoque Global - {empresa['nome']}", color=discord.Color.gold())
         
         if not estoque:
             embed.description = "📭 Nenhum produto em estoque."
         else:
             for item in estoque[:25]:
-                embed.add_field(
-                    name=item['nome'],
-                    value=f"**{item['quantidade']}** unidades",
-                    inline=True
-                )
+                embed.add_field(name=item['nome'], value=f"**{item['quantidade']}** unidades", inline=True)
         
         embed.set_footer(text=f"Atualizado: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
         await ctx.send(embed=embed)
-
-    # ============================================
-    # VER PRODUTOS
-    # ============================================
 
     @commands.command(name='produtos', aliases=['catalogo', 'tabela', 'codigos'])
     @empresa_configurada()
     async def ver_produtos(self, ctx):
         """Lista todos os produtos configurados com seus códigos."""
         empresa = await selecionar_empresa(ctx)
-        if not empresa:
-            return
+        if not empresa: return
         produtos = await get_produtos_empresa(empresa['id'])
         
         if not produtos:
-            embed = discord.Embed(
-                title="❌ Nenhum Produto Configurado",
-                description="A empresa ainda não tem produtos configurados.",
-                color=discord.Color.red()
-            )
-            embed.add_field(
-                name="🔧 Como configurar?",
-                value="Um **administrador** deve usar um dos comandos:\n"
-                      "• `!configmedio` - Configura preços médios\n"
-                      "• `!configmin` - Configura preços mínimos\n"
-                      "• `!configmax` - Configura preços máximos",
-                inline=False
-            )
-            await ctx.send(embed=embed)
+            await ctx.send(embed=create_error_embed("❌ Nenhum Produto", "A empresa ainda não tem produtos configurados."))
             return
         
         embed = discord.Embed(
-            title=f"📦 Catálogo de Produtos - {empresa['nome']}",
-            description=f"**{len(produtos)}** produtos disponíveis\n"
-                        f"Use o **código** para adicionar ao estoque ou encomendas",
+            title=f"📦 Catálogo - {empresa['nome']}",
+            description=f"**{len(produtos)}** produtos disponíveis",
             color=discord.Color.blue()
         )
         
         categorias = {}
         for codigo, p in produtos.items():
             cat = p['produtos_referencia'].get('categoria', 'Outros')
-            if cat not in categorias:
-                categorias[cat] = []
+            if cat not in categorias: categorias[cat] = []
             categorias[cat].append((codigo, p))
         
         for cat, prods in list(categorias.items())[:6]:
-            linhas = []
-            for codigo, p in prods[:6]:
-                nome = p['produtos_referencia']['nome'][:18]
-                preco = p['preco_venda']
-                linhas.append(f"`{codigo}` {nome} R${preco:.2f}")
-            
-            if len(prods) > 6:
-                linhas.append(f"*+{len(prods) - 6} mais...*")
-            
-            embed.add_field(name=f"� {cat} ({len(prods)})", value="\n".join(linhas), inline=True)
+            linhas = [f"`{c}` {p['produtos_referencia']['nome'][:18]} R${p['preco_venda']:.2f}" for c, p in prods[:6]]
+            embed.add_field(name=f"📦 {cat}", value="\n".join(linhas) or "Vazio", inline=True)
         
-        embed.add_field(
-            name="💡 Exemplos de Uso",
-            value="• `!add rotulo10` - Adiciona 10 ao estoque\n"
-                  "• `!novaencomenda` - Criar encomenda interativa\n"
-                  "• `!verprecos` - Ver tabela de preços",
-            inline=False
-        )
-        
-        embed.set_footer(text="Dica: Os códigos são case-insensitive (maiúsculo ou minúsculo)")
         await ctx.send(embed=embed)
-
-    # ============================================
-    # ENCOMENDAS - NOVA (MENU INTERATIVO)
-    # ============================================
-
-    # ============================================
-    # ENCOMENDAS (UI BUILDER)
-    # ============================================
-
-    class OrderQtyModal(discord.ui.Modal, title="Quantidade do Item"):
-        def __init__(self, view, produto_codigo, produto_nome, preco):
-            super().__init__()
-            self.view_ref = view
-            self.produto_codigo = produto_codigo
-            self.produto_nome = produto_nome
-            self.preco = preco
-
-            self.qty = discord.ui.TextInput(
-                label=f"Qtd de {produto_nome}",
-                placeholder="Ex: 50",
-                min_length=1, max_length=5, required=True
-            )
-            self.add_item(self.qty)
-
-        async def on_submit(self, interaction: discord.Interaction):
-            try:
-                qtd = int(self.qty.value)
-                if qtd <= 0: raise ValueError
-            except:
-                await interaction.response.send_message(embed=create_error_embed("Erro", "Quantidade inválida."), ephemeral=True)
-                return
-
-            # Add to cart in view
-            await self.view_ref.add_to_cart(interaction, self.produto_codigo, self.produto_nome, qtd, self.preco)
-
-    class ProductSelect(discord.ui.Select):
-        def __init__(self, view, produtos):
-            options = []
-            for codigo, p in list(produtos.items())[:25]:
-                nome = p['produtos_referencia']['nome']
-                preco = p['preco_venda']
-                options.append(discord.SelectOption(
-                    label=f"{nome}", 
-                    value=codigo, 
-                    description=f"R$ {preco:.2f}",
-                    emoji="📦"
-                ))
-            super().__init__(placeholder="Selecione um produto para adicionar...", options=options)
-            self.view_ref = view
-            self.produtos = produtos
-
-        async def callback(self, interaction: discord.Interaction):
-            codigo = self.values[0]
-            prod = self.produtos[codigo]
-            # Open Modal for Qty
-            await interaction.response.send_modal(
-                ProducaoCog.OrderQtyModal(
-                    self.view_ref, codigo, 
-                    prod['produtos_referencia']['nome'], 
-                    float(prod['preco_venda'])
-                )
-            )
-
-    class OrderBuilderView(discord.ui.View):
-        def __init__(self, ctx, produtos, empresa_id, func_id, comprador_nome):
-            super().__init__(timeout=300)
-            self.ctx = ctx
-            self.produtos = produtos
-            self.empresa_id = empresa_id
-            self.func_id = func_id
-            self.comprador_nome = comprador_nome
-            self.cart = [] # [{'codigo':..., 'nome':..., 'qtd':..., 'valor':...}]
-
-            # Add Select Menu
-            self.add_item(ProducaoCog.ProductSelect(self, produtos))
-
-        async def update_message(self, interaction: discord.Interaction):
-            total = sum(i['valor'] for i in self.cart)
-            
-            embed = discord.Embed(
-                title=f"📦 Nova Encomenda: {self.comprador_nome}",
-                description="Adicione itens usando o menu abaixo.",
-                color=discord.Color.blue()
-            )
-            
-            cart_text = ""
-            if not self.cart:
-                cart_text = "🛒 Carrinho vazio."
-            else:
-                for idx, item in enumerate(self.cart):
-                    cart_text += f"{idx+1}. **{item['nome']}** x{item['qtd']} (R$ {item['valor']:.2f})\n"
-            
-            embed.add_field(name="Itens", value=cart_text, inline=False)
-            embed.add_field(name="💰 Total", value=f"**R$ {total:.2f}**", inline=False)
-            
-            # Enable/Disable Confirm Button
-            self.children[1].disabled = len(self.cart) == 0 # Confirm Button is index 1 (after select)
-            
-            if interaction.response.is_done():
-                await interaction.edit_original_response(embed=embed, view=self)
-            else:
-                await interaction.response.edit_message(embed=embed, view=self)
-
-        async def add_to_cart(self, interaction: discord.Interaction, codigo, nome, qtd, preco_unit):
-            valor = qtd * preco_unit
-            
-            # Check existing
-            existing = next((i for i in self.cart if i['codigo'] == codigo), None)
-            if existing:
-                existing['qtd'] += qtd
-                existing['valor'] += valor
-            else:
-                self.cart.append({
-                    'codigo': codigo,
-                    'nome': nome,
-                    'qtd': qtd,
-                    'preco_unit': preco_unit,
-                    'valor': valor
-                })
-            
-            await self.update_message(interaction)
-
-        @discord.ui.button(label="Finalizar Encomenda", style=discord.ButtonStyle.green, emoji="✅", disabled=True, row=1)
-        async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-            if not self.cart: return
-            
-            # Prepare items for DB function
-            # The database.py function expects a list of dicts.
-            # We map our cart definition to the expected DB schema.
-            # database.py usage of 'itens' column implies it stores just the list.
-            
-            # We need to import criar_encomenda at top of file, or here.
-            # Assuming 'from database import criar_encomenda' will be added to imports.
-            from database import criar_encomenda
-            
-            # The logic in database.py calculates total itself, but expects 'valor' in items?
-            # Let's check database.py: 
-            # valor_total = sum(item.get('valor', 0) for item in itens)
-            # So we must pass 'valor' key for each item.
-            
-            itens_db = [{
-                'codigo': i['codigo'],
-                'nome': i['nome'],
-                'quantidade': i['qtd'],
-                'quantidade_entregue': 0,
-                'valor_unitario': i['preco_unit'],
-                'valor': i['valor'] # Important for sum in criar_encomenda
-            } for i in self.cart]
-            
-            try:
-                encomenda = await criar_encomenda(
-                    empresa_id=self.empresa_id,
-                    comprador=self.comprador_nome,
-                    itens=itens_db
-                )
-                
-                if not encomenda:
-                    raise Exception("Erro ao criar encomenda via DB.")
-                
-                enc_id = encomenda['id']
-                total_val = encomenda['valor_total']
-                
-                embed = create_success_embed(f"Encomenda #{enc_id} Criada!", f"Cliente: {self.comprador_nome}")
-                embed.add_field(name="Total", value=f"R$ {total_val:.2f}")
-                embed.set_footer(text="Use !entregar para finalizar a entrega.")
-                
-                await interaction.response.edit_message(embed=embed, view=None)
-                self.stop()
-                
-            except Exception as e:
-                await handle_interaction_error(interaction, e)
-
-        @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.red, emoji="❌", row=1)
-        async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-            await interaction.response.edit_message(embed=create_error_embed("Cancelado", "Encomenda cancelada."), view=None)
-            self.stop()
-
-    class ClientNameModal(discord.ui.Modal, title="Nome do Cliente"):
-        def __init__(self, ctx, produtos, empresa_id, func_id):
-            super().__init__()
-            self.ctx = ctx
-            self.produtos = produtos
-            self.empresa_id = empresa_id
-            self.func_id = func_id
-
-            self.nome = discord.ui.TextInput(
-                label="Nome do Comprador",
-                placeholder="Ex: Delegacia, Hospital...",
-                min_length=3,
-                required=True
-            )
-            self.add_item(self.nome)
-
-        async def on_submit(self, interaction: discord.Interaction):
-            # Launch Order Builder directly
-            view = ProducaoCog.OrderBuilderView(self.ctx, self.produtos, self.empresa_id, self.func_id, self.nome.value)
-            
-            embed = create_info_embed(f"📦 Nova Encomenda: {self.nome.value}", "Selecione os produtos abaixo para montar o pedido.")
-            embed.add_field(name="Carrinho", value="Vazio", inline=False)
-            
-            await interaction.response.send_message(embed=embed, view=view)
-
 
     @commands.hybrid_command(name='encomenda', aliases=['novaencomenda', 'pedido'], description="Cria uma nova encomenda interativa.")
     @empresa_configurada()
@@ -619,8 +498,23 @@ class ProducaoView(discord.ui.View):
             await ctx.send(embed=create_error_embed("Sem Produtos", "Empresa sem produtos configurados."), ephemeral=True)
             return
 
-        # Start with Modal for Client Name
-        await ctx.send_modal(self.ClientNameModal(ctx, produtos, empresa['id'], func_id))
+        # Fix for hybrid command: Check if interaction exists
+        if ctx.interaction:
+            await ctx.interaction.response.send_modal(ClientNameModal(ctx, produtos, empresa['id'], func_id))
+        else:
+            # Fallback for text command: Send a button to open the modal
+            view = discord.ui.View()
+            btn = discord.ui.Button(label="📝 Criar Encomenda", style=discord.ButtonStyle.primary)
+            
+            async def btn_callback(interaction: discord.Interaction):
+                if interaction.user.id != ctx.author.id:
+                    await interaction.response.send_message("Apenas quem chamou o comando pode usar.", ephemeral=True)
+                    return
+                await interaction.response.send_modal(ClientNameModal(ctx, produtos, empresa['id'], func_id))
+            
+            btn.callback = btn_callback
+            view.add_item(btn)
+            await ctx.send("Clique abaixo para preencher os dados da encomenda:", view=view)
 
     # ============================================
     # ENCOMENDAS - VER (VISUAL MELHORADO)
@@ -686,7 +580,7 @@ class ProducaoView(discord.ui.View):
         if len(encomendas) > 10:
             embed.set_footer(text=f"Mostrando 10 de {len(encomendas)} encomendas")
         else:
-            embed.set_footer(text="💡 Use !novaencomenda para criar | !entregar [ID] para entregar")
+            embed.set_footer(text="💡 Use !entregar [ID] (Ex: !entregar 9) para finalizar!")
         
         await ctx.send(embed=embed)
 
@@ -696,10 +590,30 @@ class ProducaoView(discord.ui.View):
 
     @commands.command(name='entregar', aliases=['entregarencomenda'])
     @empresa_configurada()
-    async def entregar_encomenda(self, ctx, encomenda_id: int):
+    async def entregar_encomenda(self, ctx, encomenda_id: int = None):
         """Entrega encomenda completa."""
         empresa = await selecionar_empresa(ctx)
         if not empresa:
+            return
+
+        # Improved Error Handling/Tutorial for missing ID
+        if encomenda_id is None:
+            embed = discord.Embed(
+                title="❓ Como Entregar Encomendas",
+                description="Você precisa informar o **ID da Encomenda** que deseja entregar.",
+                color=discord.Color.gold()
+            )
+            embed.add_field(
+                name="1️⃣ Ver IDs", 
+                value="Use o comando `!encomendas` para ver a lista de pedidos pendentes e seus IDs (Ex: #1, #2).",
+                inline=False
+            )
+            embed.add_field(
+                name="2️⃣ Entregar", 
+                value="Digite `!entregar [ID]`.\nExemplo: `!entregar 9`",
+                inline=False
+            )
+            await ctx.send(embed=embed)
             return
         
         func = await get_funcionario_by_discord_id(str(ctx.author.id))

@@ -105,6 +105,11 @@ async def test_promover_usuario(cog, mock_ctx, mock_env):
     mock_select.data = [{'id': 55, 'role': 'funcionario'}]
     deps['supabase'].table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_select
     
+    # Fix: Ensure function-level imports are AsyncMock
+    deps['database'] = sys.modules['database']
+    deps['database'].get_usuario_frontend = AsyncMock(return_value={'id': 55, 'role': 'funcionario'})
+    deps['database'].atualizar_role_usuario_frontend = AsyncMock(return_value=True)
+
     await cog.promover_admin.callback(cog, mock_ctx, membro=member)
     
     # verify update call

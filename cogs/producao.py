@@ -31,135 +31,132 @@ class ProducaoCog(commands.Cog, name="Produção"):
     # ESTOQUE - ADICIONAR
     # ============================================
 
-    @commands.command(name='add', aliases=['1', 'produzir', 'fabricar'])
+from ui_utils import create_success_embed, create_error_embed, create_info_embed, handle_interaction_error
+
+class ProducaoModal(discord.ui.Modal, title="Registrar Produção"):
+    def __init__(self, produto_codigo: str, produto_nome: str, produto_preco: float, empresa_id: int, func_id: int, eh_admin: bool):
+        super().__init__()
+        self.produto_codigo = produto_codigo
+        self.produto_nome = produto_nome
+        self.produto_preco = produto_preco
+        self.empresa_id = empresa_id
+        self.func_id = func_id
+        self.eh_admin = eh_admin
+
+        self.quantidade = discord.ui.TextInput(
+            label=f"Quantidade de {produto_nome}",
+            placeholder="Ex: 100",
+            min_length=1,
+            max_length=5,
+            required=True
+        )
+        self.add_item(self.quantidade)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            qty = int(self.quantidade.value)
+            if qty <= 0:
+                raise ValueError("Quantidade deve ser maior que zero.")
+        except ValueError:
+            await interaction.response.send_message(
+                embed=create_error_embed("Erro", "Quantidade inválida. Digite apenas números inteiros positivos."),
+                ephemeral=True
+            )
+            return
+
+        # Lógica de Adição (Idêntica à original)
+        resultado = await adicionar_ao_estoque(self.func_id, self.empresa_id, self.produto_codigo, qty)
+        
+        if resultado:
+            # Cálculo de Comissão
+            if self.eh_admin:
+                comissao = Decimal('0')
+                txt_comissao = "Isento (Admin)"
+            else:
+                comissao = Decimal(str(self.produto_preco)) * qty
+                txt_comissao = f"💰 Acumulado: R$ {comissao:.2f}"
+            
+            # Embed de Sucesso
+            embed = create_success_embed("Produção Registrada!")
+            embed.add_field(name=f"🏭 {self.produto_nome}", value=f"+{qty} (Total: {resultado['quantidade']})\n{txt_comissao}", inline=False)
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        else:
+            await interaction.response.send_message(embed=create_error_embed("Erro", "Falha ao adicionar ao estoque."), ephemeral=True)
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception):
+        await handle_interaction_error(interaction, error)
+
+class ProducaoSelect(discord.ui.Select):
+    def __init__(self, produtos: dict, empresa_id: int, func_id: int, eh_admin: bool):
+        options = []
+        # Limita a 25 opções (limite do Discord)
+        for codigo, p in list(produtos.items())[:25]:
+            nome = p['produtos_referencia']['nome']
+            preco = p['preco_pagamento_funcionario']
+            label = f"{nome[:20]} (R$ {preco})"
+            options.append(discord.SelectOption(label=label, value=codigo, description=f"Cód: {codigo}"))
+
+        super().__init__(placeholder="Selecione um produto para produzir...", min_values=1, max_values=1, options=options)
+        self.produtos = produtos
+        self.empresa_id = empresa_id
+        self.func_id = func_id
+        self.eh_admin = eh_admin
+
+    async def callback(self, interaction: discord.Interaction):
+        codigo = self.values[0]
+        prod = self.produtos[codigo]
+        
+        modal = ProducaoModal(
+            produto_codigo=codigo,
+            produto_nome=prod['produtos_referencia']['nome'],
+            produto_preco=prod['preco_pagamento_funcionario'],
+            empresa_id=self.empresa_id,
+            func_id=self.func_id,
+            eh_admin=self.eh_admin
+        )
+        await interaction.response.send_modal(modal)
+
+class ProducaoView(discord.ui.View):
+    def __init__(self, produtos: dict, empresa_id: int, func_id: int, eh_admin: bool):
+        super().__init__(timeout=180)
+        self.add_item(ProducaoSelect(produtos, empresa_id, func_id, eh_admin))
+
+# ============================================
+# ESTOQUE - PRODUZIR (NOVO)
+# ============================================
+
+    @commands.hybrid_command(name='produzir', aliases=['add', 'fabricar'], description="Abre o menu de produção (Fabricação)")
     @empresa_configurada()
-    async def add_produto(self, ctx, *, entrada: str = None):
-        """Adiciona produtos ao seu estoque (fabricação). Uso: !add rotulo 10 ou !add rotulo10"""
+    async def produzir(self, ctx):
+        """Abre o painel de produção interativo."""
         empresa = await selecionar_empresa(ctx)
         if not empresa: return
-        
+
+        # Identifica Funcionário
         func_id = await get_or_create_funcionario(str(ctx.author.id), ctx.author.display_name, empresa['id'])
         if not func_id:
-            await ctx.send("❌ Erro ao identificar funcionário.")
+            await ctx.send(embed=create_error_embed("Erro", "Erro ao identificar funcionário."), ephemeral=True)
             return
 
-        # Verifica se é Admin (isento de comissão)
-        eh_admin = False
-        try:
-            # Verifica na tabela de usuarios_frontend se tem role admin/superadmin nessa guild
-            resp = supabase.table('usuarios_frontend').select('role').eq('discord_id', str(ctx.author.id)).eq('guild_id', str(ctx.guild.id)).execute()
-            if resp.data:
-                role = resp.data[0]['role']
-                logger.debug(f"Role check: {role} in ['admin', 'superadmin']")
-                if role in ['admin', 'superadmin']:
-                    eh_admin = True
-        except Exception as e: # Catch specific exception for better logging
-            logger.error(f"Erro ao verificar role de admin para {ctx.author.id}: {e}")
+        # Verifica Admin
+        from utils import verificar_is_admin
+        eh_admin = await verificar_is_admin(ctx, empresa)
 
+        # Busca Produtos
         produtos = await get_produtos_empresa(empresa['id'])
         if not produtos:
-            await ctx.send("❌ Nenhum produto configurado.")
+            await ctx.send(embed=create_error_embed("Sem Produtos", "Nenhum produto configurado na empresa."), ephemeral=True)
             return
 
-        modo_pagamento = empresa.get('modo_pagamento', 'producao')
+        # Envia View
+        view = ProducaoView(produtos, empresa['id'], func_id, eh_admin)
+        embed = create_info_embed("🏭 Painel de Produção", "Selecione o produto abaixo para registrar sua produção.")
         
-        # Ajuda interativa
-        if not entrada:
-            embed = discord.Embed(title="🏭 Adicionar Produção", description="Adicione produtos fabricados.", color=discord.Color.blue())
-            
-            if eh_admin:
-                embed.add_field(name="🛡️ Admin", value="Você é **Admin**, não recebe comissão (Isento).", inline=False)
-            elif modo_pagamento == 'producao':
-                embed.add_field(name="💰 Pagamento", value="✅ **Acumulativo** (pago via !pagarestoque)", inline=False)
-            else:
-                embed.add_field(name="💰 Pagamento", value="📦 **Comissão** (pago ao entregar + !pagarestoque)", inline=False)
-
-            prods_sample = list(produtos.items())[:6]
-            prods_text = "\n".join([f"`{c}` - {p['produtos_referencia']['nome']}" for c, p in prods_sample])
-            if len(produtos) > 6: prods_text += f"\n*+{len(produtos)-6} mais... use `!produtos`*"
-            
-            embed.add_field(name="📦 Disponíveis", value=prods_text, inline=False)
-            embed.set_footer(text="Ex: !add rotulo 100")
-            await ctx.send(embed=embed)
-            return
+        # Se for slash command, ephemeral=True, se for texto, normal.
+        ephemeral = True # Defaults to ephemeral for better UX
         
-        # Parse entrada
-        import re
-        entrada_limpa = entrada.strip()
-        partes = entrada_limpa.split()
-        itens_para_add = []
-        
-        if len(partes) == 2 and partes[1].isdigit():
-            itens_para_add.append((partes[0].lower(), int(partes[1])))
-        else:
-            matches = PRODUTO_REGEX.findall(entrada)
-            if matches:
-                 for c, q in matches: itens_para_add.append((c.lower(), int(q)))
-            else:
-                codigo = entrada_limpa.lower()
-                if codigo in produtos:
-                    embed = discord.Embed(title="❓ Quantidade?", description=f"Produto: **{produtos[codigo]['produtos_referencia']['nome']}**", color=discord.Color.blue())
-                    await ctx.send(embed=embed)
-                    try:
-                        msg = await self.bot.wait_for('message', timeout=30.0, check=lambda m: m.author == ctx.author and m.channel == ctx.channel and m.content.isdigit())
-                        itens_para_add.append((codigo, int(msg.content)))
-                    except:
-                        return
-                else:
-                    await ctx.send(f"❌ Não entendi `{entrada}`.")
-                    return
-
-        # Processa
-        resultados = []
-        erros = []
-        total_comissao = Decimal('0')
-        func = await get_funcionario_by_discord_id(str(ctx.author.id))
-        
-        for codigo, quantidade in itens_para_add:
-            if quantidade <= 0: continue
-            if codigo not in produtos:
-                erros.append(f"`{codigo}` não encontrado.")
-                continue
-                
-            resultado = await adicionar_ao_estoque(func_id, empresa['id'], codigo, quantidade)
-            if resultado:
-                # Se for admin, comissão é ZERO
-                if eh_admin:
-                    comissao = Decimal('0')
-                else:
-                    preco_func = Decimal(str(produtos[codigo]['preco_pagamento_funcionario']))
-                    comissao = preco_func * quantidade
-                
-                total_comissao += comissao
-                resultados.append({
-                    'nome': resultado['nome'],
-                    'adicionado': quantidade,
-                    'total': resultado['quantidade'],
-                    'comissao': float(comissao)
-                })
-            else:
-                erros.append(codigo)
-
-        pago_agora = False
-        # Pagamento modificado para ser sempre manual (acumulado)
-        # O valor fica no estoque e é pago via !pagarestoque ou quando entregue (comissao_pendente)
-
-        if resultados:
-            embed = discord.Embed(title="✅ Produção Registrada!", color=discord.Color.green())
-            if eh_admin:
-                embed.description = "🛡️ **Modo Admin:** Produção registrada sem custos."
-            
-            for r in resultados:
-                txt_comissao = "Isento (Admin)" if eh_admin else f"💰 Acumulado: R$ {r['comissao']:.2f}"
-                embed.add_field(name=f"🏭 {r['nome']}", value=f"+{r['adicionado']} (Total: {r['total']})\n{txt_comissao}", inline=True)
-            
-            if pago_agora:
-                embed.add_field(name="💵 Pagamento", value=f"**R$ {total_comissao:.2f}** creditados.", inline=False)
-            
-            await ctx.send(embed=embed)
-        
-        if erros:
-            await ctx.send(f"⚠️ Erro ao adicionar: {', '.join(erros)}")
+        await ctx.send(embed=embed, view=view, ephemeral=ephemeral)
 
     # ============================================
     # ESTOQUE - VER

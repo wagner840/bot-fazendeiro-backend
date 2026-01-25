@@ -495,30 +495,44 @@ class ProducaoView(discord.ui.View):
         async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
             if not self.cart: return
             
-            # Save to DB
-            total = sum(i['valor'] for i in self.cart)
-            itens_json = [{
+            # Prepare items for DB function
+            # The database.py function expects a list of dicts.
+            # We map our cart definition to the expected DB schema.
+            # database.py usage of 'itens' column implies it stores just the list.
+            
+            # We need to import criar_encomenda at top of file, or here.
+            # Assuming 'from database import criar_encomenda' will be added to imports.
+            from database import criar_encomenda
+            
+            # The logic in database.py calculates total itself, but expects 'valor' in items?
+            # Let's check database.py: 
+            # valor_total = sum(item.get('valor', 0) for item in itens)
+            # So we must pass 'valor' key for each item.
+            
+            itens_db = [{
                 'codigo': i['codigo'],
                 'nome': i['nome'],
                 'quantidade': i['qtd'],
                 'quantidade_entregue': 0,
-                'valor_unitario': i['preco_unit']
+                'valor_unitario': i['preco_unit'],
+                'valor': i['valor'] # Important for sum in criar_encomenda
             } for i in self.cart]
             
             try:
-                response = supabase.table('encomendas').insert({
-                    'comprador': self.comprador_nome,
-                    'itens_json': itens_json,
-                    'valor_total': total,
-                    'status': 'pendente',
-                    'funcionario_responsavel_id': self.func_id,
-                    'empresa_id': self.empresa_id
-                }).execute()
+                encomenda = await criar_encomenda(
+                    empresa_id=self.empresa_id,
+                    comprador=self.comprador_nome,
+                    itens=itens_db
+                )
                 
-                enc_id = response.data[0]['id']
+                if not encomenda:
+                    raise Exception("Erro ao criar encomenda via DB.")
+                
+                enc_id = encomenda['id']
+                total_val = encomenda['valor_total']
                 
                 embed = create_success_embed(f"Encomenda #{enc_id} Criada!", f"Cliente: {self.comprador_nome}")
-                embed.add_field(name="Total", value=f"R$ {total:.2f}")
+                embed.add_field(name="Total", value=f"R$ {total_val:.2f}")
                 embed.set_footer(text="Use !entregar para finalizar a entrega.")
                 
                 await interaction.response.edit_message(embed=embed, view=None)

@@ -216,12 +216,40 @@ class PrecosCog(commands.Cog, name="Preços"):
         produtos_config = []
         
         for p in produtos_ref:
+            # Parse min/max handling None
+            p_min_raw = p.get('preco_minimo')
+            p_max_raw = p.get('preco_maximo')
+            
+            p_min = float(p_min_raw) if p_min_raw is not None else None
+            p_max = float(p_max_raw) if p_max_raw is not None else None
+
+            preco_venda = 0.0
+
             if modo == 'minimo':
-                preco_venda = float(p['preco_minimo'])
+                if p_min is not None:
+                    preco_venda = p_min
+                elif p_max is not None:
+                    preco_venda = p_max # Fallback to max if min missing
+                else:
+                    continue # Skip if no price
+
             elif modo == 'maximo':
-                preco_venda = float(p['preco_maximo'])
-            else:
-                preco_venda = (float(p['preco_minimo']) + float(p['preco_maximo'])) / 2
+                if p_max is not None:
+                    preco_venda = p_max
+                elif p_min is not None:
+                    preco_venda = p_min # Fallback to min if max missing
+                else:
+                    continue
+
+            else: # medio
+                if p_min is not None and p_max is not None:
+                    preco_venda = (p_min + p_max) / 2
+                elif p_min is not None:
+                    preco_venda = p_min
+                elif p_max is not None:
+                    preco_venda = p_max
+                else:
+                    continue
             
             preco_func = round(preco_venda * 0.25, 2)
             

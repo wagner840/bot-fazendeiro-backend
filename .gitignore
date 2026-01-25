@@ -11,3 +11,4 @@ deployment-*.txt
 
 frontend/
 .claude/
+config.json

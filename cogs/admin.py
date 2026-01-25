@@ -15,7 +15,9 @@ from database import (
     get_tipos_empresa,
     criar_empresa,
     criar_usuario_frontend,
-    get_or_create_funcionario
+    get_or_create_funcionario,
+    get_bases_redm,
+    atualizar_base_servidor
 )
 from utils import empresa_configurada, selecionar_empresa
 from ui_utils import create_success_embed, create_error_embed, create_info_embed, handle_interaction_error, BaseMenuView
@@ -91,16 +93,68 @@ class AdminCog(commands.Cog, name="Administração"):
             await ctx.send(embed=create_info_embed("Já Configurado", f"Empresa já existe: **{empresa['nome']}**\nUse `/novaempresa` para adicionar mais."), ephemeral=True)
             return
 
-        tipos = await get_tipos_empresa()
-        if not tipos:
-            await ctx.send(embed=create_error_embed("Erro", "Sem tipos de empresa configurados."), ephemeral=True)
-            return
+        # 0. Check if we need to select base
+        # Logic: Show Base Select first.
+        bases = await get_bases_redm()
+        if not bases:
+             await ctx.send("❌ Erro critico: Nenhuma base REDM encontrada no sistema.")
+             return
 
-        # Reuse NovaEmpresaView logic but for initial setup
-        view = self.NovaEmpresaView(tipos, guild_id, servidor['id'], proprietario_id)
-        embed = create_info_embed("🏢 Configuração Inicial", "Selecione o tipo da sua primeira empresa.")
+        # Create View for Base Selection
+        view = self.BaseSelectView(bases, guild_id, servidor['id'], proprietario_id, self)
+        embed = create_info_embed("🌍 Selecione o Servidor REDM", 
+                                "Este bot suporta múltiplas economias.\n"
+                                "Qual servidor/base vocês jogam?")
         
         await ctx.send(embed=embed, view=view)
+
+
+    # ============================================
+    # BASE SELECT UI
+    # ============================================
+    
+    class BaseSelectView(discord.ui.View):
+        def __init__(self, bases: list, guild_id: str, servidor_id: int, proprietario_id: str, cog):
+            super().__init__(timeout=180)
+            self.bases = bases
+            self.guild_id = guild_id
+            self.servidor_id = servidor_id
+            self.proprietario_id = proprietario_id
+            self.cog = cog
+
+            # Dynamic Buttons for each base
+            for base in bases:
+                btn = discord.ui.Button(label=base['nome'], custom_id=f"base_{base['id']}", style=discord.ButtonStyle.primary)
+                btn.callback = self.create_callback(base)
+                self.add_item(btn)
+
+        def create_callback(self, base):
+            async def callback(interaction: discord.Interaction):
+                if str(interaction.user.id) != self.proprietario_id:
+                    await interaction.response.send_message("❌ Apenas quem iniciou o comando pode selecionar.", ephemeral=True)
+                    return
+                
+                await interaction.response.defer()
+                
+                # Update Server Base
+                updated = await atualizar_base_servidor(self.guild_id, base['id'])
+                if not updated:
+                     await interaction.followup.send("❌ Erro ao atualizar base do servidor.")
+                     return
+                
+                # Proceed to Company Type Selection
+                tipos = await get_tipos_empresa(self.guild_id)
+                if not tipos:
+                    await interaction.followup.send(embed=create_error_embed("Erro", f"Nenhum tipo de empresa configurado para a base {base['nome']}."))
+                    return
+
+                # Reuse NovaEmpresaView logic
+                view = self.cog.NovaEmpresaView(tipos, self.guild_id, self.servidor_id, self.proprietario_id)
+                embed = create_info_embed(f"🏢 Configuração Inicial ({base['nome']})", "Selecione o tipo da sua primeira empresa.")
+                
+                await interaction.edit_original_response(embed=embed, view=view)
+            
+            return callback
 
     # ============================================
     # LISTAR EMPRESAS
@@ -335,7 +389,7 @@ class AdminCog(commands.Cog, name="Administração"):
             await ctx.send(embed=create_error_embed("Erro", "Use `!configurar` primeiro."), ephemeral=True)
             return
 
-        tipos = await get_tipos_empresa()
+        tipos = await get_tipos_empresa(guild_id)
         if not tipos:
             await ctx.send(embed=create_error_embed("Erro", "Nenhum tipo de empresa configurado no sistema."), ephemeral=True)
             return

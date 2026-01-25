@@ -497,13 +497,15 @@ class AdminCog(commands.Cog, name="Administração"):
         # 1. Determinar Categoria Alvo (da empresa ou genérica)
         categoria_id = empresa.get('categoria_id')
         categoria = None
+        nome_categoria = "N/A" # Initialize default
+
         if categoria_id:
             categoria = discord.utils.get(guild.categories, id=int(categoria_id))
+            if categoria:
+                nome_categoria = categoria.name
         
         if not categoria:
             # Fallback para lógica antiga de nomes se o ID não bater ou não existir
-
-
             nome_categoria = "👔 ADMINISTRAÇÃO" if eh_admin else "🏭 PRODUÇÃO"
             categoria = discord.utils.get(guild.categories, name=nome_categoria)
             
@@ -543,41 +545,59 @@ class AdminCog(commands.Cog, name="Administração"):
              else: await ctx.send(msg)
              return
 
-        func_id = await get_or_create_funcionario(str(membro.id), membro.display_name, empresa['id'])
 
-        usuario_frontend = None
-        if not eh_admin: 
-             usuario_frontend = await criar_usuario_frontend(str(membro.id), guild_id, membro.display_name, 'funcionario')
-        else:
-             usuario_frontend = True
+        try:
+            from database import atualizar_canal_funcionario # Import new function
 
-        embed = discord.Embed(
-            title=f"🏢 Bem-vindo à {empresa['nome']}!",
-            description=f"Olá {membro.mention}! Este é seu canal privado.",
-            color=discord.Color.green()
-        )
-        
-        if eh_admin:
-            embed.description += "\n🛡️ **Canal Administrativo**\nUse este canal para gerenciar a empresa."
-            embed.add_field(name="⚙️ Comandos Admin", value="`!configurar`, `!modopagamento`, `!pagar`...", inline=False)
-        
-        embed.add_field(
-            name="📋 Comandos do Bot",
-            value="`!add` - Adicionar produtos\n`!estoque` - Ver seu estoque\n`!produtos` - Ver catálogo",
-            inline=False
-        )
+            func_id = await get_or_create_funcionario(str(membro.id), membro.display_name, empresa['id'])
+            if not func_id:
+                raise Exception("Falha ao criar/obter registro de funcionário no banco.")
 
-        embed.add_field(
-            name="🌐 Painel Web",
-            value="Você tem acesso ao **Painel Fazendeiro**!\nFaça login com sua conta Discord.",
-            inline=False
-        )
+            # Update Channel ID
+            await atualizar_canal_funcionario(func_id, str(created_channel.id))
 
-        await created_channel.send(embed=embed)
-        
-        success_msg = f"✅ Canal {created_channel.mention} configurado na categoria **{nome_categoria}**!"
-        if interaction: await interaction.followup.send(success_msg)
-        else: await ctx.send(success_msg)
+            usuario_frontend = None
+            if not eh_admin: 
+                usuario_frontend = await criar_usuario_frontend(str(membro.id), guild_id, membro.display_name, 'funcionario')
+                if not usuario_frontend:
+                     raise Exception("Falha ao criar usuário frontend (verifique logs/permissões).")
+            else:
+                usuario_frontend = True
+
+
+            embed = discord.Embed(
+                title=f"🏢 Bem-vindo à {empresa['nome']}!",
+                description=f"Olá {membro.mention}! Este é seu canal privado.",
+                color=discord.Color.green()
+            )
+            
+            if eh_admin:
+                embed.description += "\n🛡️ **Canal Administrativo**\nUse este canal para gerenciar a empresa."
+                embed.add_field(name="⚙️ Comandos Admin", value="`!configurar`, `!modopagamento`, `!pagar`...", inline=False)
+            
+            embed.add_field(
+                name="📋 Comandos do Bot",
+                value="`!add` - Adicionar produtos\n`!estoque` - Ver seu estoque\n`!produtos` - Ver catálogo",
+                inline=False
+            )
+
+            embed.add_field(
+                name="🌐 Painel Web",
+                value="Você tem acesso ao **Painel Fazendeiro**!\nFaça login com sua conta Discord.",
+                inline=False
+            )
+
+            await created_channel.send(embed=embed)
+            
+            success_msg = f"✅ Canal {created_channel.mention} configurado na categoria **{nome_categoria}**!"
+            if interaction: await interaction.followup.send(success_msg)
+            else: await ctx.send(success_msg)
+
+        except Exception as e:
+            err_msg = f"❌ Erro ao configurar usuário: {e}"
+            logger.error(f"Erro em bemvindo: {e}", exc_info=True)
+            if interaction: await interaction.followup.send(err_msg)
+            else: await ctx.send(err_msg)
 
     # ============================================
     # LIMPAR MENSAGENS

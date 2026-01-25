@@ -154,7 +154,7 @@ async def on_command_error(ctx, error):
 
 @bot.command(name='help', aliases=['ajuda', 'comandos'])
 async def ajuda(ctx):
-    """Mostra todos os comandos disponíveis categorizados."""
+    """Mostra o menu principal do bot."""
     guild_id = str(ctx.guild.id)
     empresas = await get_empresas_by_guild(guild_id)
     
@@ -163,68 +163,53 @@ async def ajuda(ctx):
         if len(empresas) == 1:
             nome_empresa = empresas[0]['nome']
         else:
-            nome_empresa = f"{len(empresas)} empresas configuradas"
+            nome_empresa = f"{len(empresas)} empresas"
 
     embed = discord.Embed(
         title="🏢 Bot Multi-Empresa Downtown",
-        description=f"**Empresa(s):** {nome_empresa}\nVersão: 3.0 (UI Moderna)",
+        description=f"**Empresa:** {nome_empresa}\nVersão: 3.0 (UI Interativa)",
         color=discord.Color.blue()
     )
 
-    # 1. GERAL
     embed.add_field(
-        name="ℹ️ Geral",
-        value="`!empresa` - Ver informações da empresa\n"
-              "`!assinatura` - Ver status da assinatura\n"
-              "`!planos` - Ver planos disponíveis\n"
-              "`!assinarpix` - Gerar link de pagamento",
-        inline=False
-    )
-
-    # 2. PRODUÇÃO
-    embed.add_field(
-        name="🏭 Produção & Encomendas",
-        value="`/produzir` - **Novo!** Menu interativo de Fabricação\n"
-              "`!estoque` - Ver seu estoque e saldo\n"
-              "`!produtos` - Ver catálogo de códigos e produtos\n"
-              "`/encomenda` - **Novo!** Criar encomenda (Menu)\n"
-              "`!encomendas` - Ver encomendas pendentes\n"
-              "`!entregar [ID]` - Entregar encomenda para cliente\n"
-              "`!deletar [codigo]` - Jogar fora/remover do estoque\n"
-              "`!verprecos` - Ver tabela de preços completa",
-        inline=False
-    )
-
-    # 3. ADMINISTRAÇÃO
-    embed.add_field(
-        name="🛡️ Administração",
-        value="`/novaempresa` - **Novo!** Menu para criar empresa\n"
-              "`!configurar` - Configuração inicial da empresa\n"
-              "`!modopagamento` - Definir Produção ou Entrega\n"
-              "`!configurarprecos` - Configurar preços manualmente\n"
-              "`!comissao [%]` - Definir comissão\n"
-              "`!usuarios` - Listar equipe cadastrada\n"
-              "`!bemvindo @pessoa` - Criar cadastro e canal privado\n"
-              "`!promover @pessoa` - Promover funcionário a Admin",
-        inline=False
-    )
-
-    # 4. FINANCEIRO
-    embed.add_field(
-        name="💰 Financeiro (Admin)",
-        value="`!caixa` - Relatório financeiro geral\n"
-              "`/pagar` - **Novo!** Pagamento seguro com confirmação\n"
-              "`!pagarestoque @pessoa` - Pagar acumulado e zerar estoque",
+        name="🖥️ Menus Interativos (Principais)",
+        value="`/produzir` - **Painel de Produção** (Fábrica)\n"
+              "`/encomenda` - **Painel de Vendas** (Encomendas)\n"
+              "`/pagar` - **Assistente de Pagamento** (Financeiro)\n"
+              "`/novaempresa` - **Criador de Empresa** (Admin)",
         inline=False
     )
 
     embed.add_field(
-        name="🌐 Painel Web",
-        value="Gerencie tudo pelo painel web: [Clique Aqui](http://localhost:3000)",
+        name="📋 Comandos Rápidos",
+        value="`!estoque` - Ver seu estoque\n"
+              "`!produtos` - Ver preços e códigos\n"
+              "`!assinatura` - Ver status do bot\n"
+              "`!help` - Ver esta mensagem",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🛠️ Administração",
+        value="Use `!configurar` ou `/novaempresa` para começar.\n"
+              "Outros comandos: `!bemvindo`, `!comissao`, `!usuarios`.",
         inline=False
     )
 
+    embed.set_footer(text="💡 Use os comandos com '/' para abrir os menus interativos.")
     await ctx.send(embed=embed)
+
+
+@bot.command(name='sync')
+@commands.has_permissions(administrator=True)
+async def sync(ctx):
+    """Sincroniza os slash commands manualmente."""
+    msg = await ctx.send("⏳ Sincronizando comandos...")
+    try:
+        synced = await bot.tree.sync()
+        await msg.edit(content=f"✅ {len(synced)} comandos sincronizados com sucesso!")
+    except Exception as e:
+        await msg.edit(content=f"❌ Erro ao sincronizar: {e}")
 
 
 @bot.command(name='empresa', aliases=['info'])

@@ -188,18 +188,75 @@ class FinanceiroCog(commands.Cog, name="Financeiro"):
     # PAGAR ESTOQUE
     # ============================================
 
+    # ============================================
+    # PAGAR ESTOQUE (UI VERIFIED)
+    # ============================================
+
+    class PayStockView(discord.ui.View):
+        def __init__(self, ctx, func_id, empresa_id, total_pagar, valor_estoque, valor_pendente, pendentes_ids):
+            super().__init__(timeout=60)
+            self.ctx = ctx
+            self.func_id = func_id
+            self.empresa_id = empresa_id
+            self.total_pagar = total_pagar
+            self.valor_estoque = valor_estoque
+            self.valor_pendente = valor_pendente
+            self.pendentes_ids = pendentes_ids
+
+        async def interaction_check(self, interaction: discord.Interaction):
+            return interaction.user == self.ctx.author
+
+        @discord.ui.button(label="Confirmar Pagamento", style=discord.ButtonStyle.green, emoji="✅")
+        async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+            # Processa Pagamento
+            try:
+                # 1. Registra Histórico
+                supabase.table('historico_pagamentos').insert({
+                    'funcionario_id': self.func_id,
+                    'tipo': 'estoque_acumulado',
+                    'valor': float(self.total_pagar),
+                    'descricao': f'Pagamento Acumulado (Estoque: R${self.valor_estoque:.2f} + Vendas: R${self.valor_pendente:.2f})'
+                }).execute()
+                
+                # 2. Atualiza Saldo
+                # Get current balance fresh
+                f_data = supabase.table('funcionarios').select('saldo').eq('id', self.func_id).single().execute()
+                current_balance = float(f_data.data['saldo'])
+                
+                supabase.table('funcionarios').update({
+                    'saldo': current_balance + float(self.total_pagar)
+                }).eq('id', self.func_id).execute()
+                
+                # 3. Limpa Estoque
+                supabase.table('estoque_produtos').delete().eq('funcionario_id', self.func_id).eq('empresa_id', self.empresa_id).execute()
+                
+                # 4. Atualiza Comissões
+                if self.pendentes_ids:
+                    supabase.table('transacoes').update({'tipo': 'comissao_paga'}).in_('id', self.pendentes_ids).execute()
+
+                embed = create_success_embed("Pagamento Realizado!", f"Total Pago: **R$ {self.total_pagar:.2f}**")
+                await interaction.response.edit_message(embed=embed, view=None)
+                self.stop()
+                
+            except Exception as e:
+                await handle_interaction_error(interaction, e)
+
+        @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.red, emoji="❌")
+        async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await interaction.response.edit_message(embed=create_warning_embed("Cancelado", "Pagamento cancelado."), view=None)
+            self.stop()
+
     @commands.command(name='pagarestoque', aliases=['pe'])
     @commands.has_permissions(manage_messages=True)
     @empresa_configurada()
     async def pagar_estoque(self, ctx, membro: discord.Member):
-        """Paga e zera estoque do funcionário (+ comissões de vendas)."""
+        """Paga e zera estoque do funcionário (Menu Interativo)."""
         empresa = await selecionar_empresa(ctx)
-        if not empresa:
-            return
+        if not empresa: return
         
         func = await get_funcionario_by_discord_id(str(membro.id))
         if not func:
-            await ctx.send(f"❌ {membro.display_name} não cadastrado.")
+            await ctx.send(embed=create_error_embed("Erro", "Funcionário não cadastrado."), ephemeral=True)
             return
         
         # 1. Calcula valor do Estoque Atual
@@ -209,7 +266,7 @@ class FinanceiroCog(commands.Cog, name="Financeiro"):
             for item in estoque:
                 valor_estoque += Decimal(str(item['preco_funcionario'])) * item['quantidade']
         
-        # 2. Calcula Comissões Pendentes (Vendas/Entregas)
+        # 2. Calcula Comissões
         comissoes = supabase.table('transacoes').select('*').eq('empresa_id', empresa['id']).eq('funcionario_id', func['id']).eq('tipo', 'comissao_pendente').execute()
         valor_pendente = Decimal('0')
         pendentes_ids = []
@@ -221,60 +278,21 @@ class FinanceiroCog(commands.Cog, name="Financeiro"):
         total_pagar = valor_estoque + valor_pendente
         
         if total_pagar <= 0:
-            await ctx.send(f"❌ {membro.display_name} não tem valores a receber (Estoque vazio e sem comissões pendentes).")
+            await ctx.send(embed=create_warning_embed("Nada a Pagar", f"{membro.display_name} não tem valores pendentes."), ephemeral=True)
             return
         
-        # Confirmação
+        # Confirmação UI
         embed = discord.Embed(
-            title=f"💰 Pagamento - {membro.display_name}",
-            description="Confirme com `sim` para realizar o pagamento e zerar pendências.",
+            title=f"💰 Confirmar Pagamento - {membro.display_name}",
+            description="Revise os valores abaixo e confirme.",
             color=discord.Color.gold()
         )
-        
         embed.add_field(name="📦 Valor em Estoque", value=f"R$ {valor_estoque:.2f}", inline=True)
-        embed.add_field(name="📄 Comissões Pendentes", value=f"R$ {valor_pendente:.2f}", inline=True)
-        embed.add_field(name="💵 TOTAL A PAGAR", value=f"**R$ {total_pagar:.2f}**", inline=False)
+        embed.add_field(name="📄 Comissões", value=f"R$ {valor_pendente:.2f}", inline=True)
+        embed.add_field(name="💵 TOTAL", value=f"**R$ {total_pagar:.2f}**", inline=False)
         
-        if estoque:
-            detalhes_estoque = "\n".join([f"• {i['nome']} ({i['quantidade']}x)" for i in estoque[:5]])
-            if len(estoque) > 5: detalhes_estoque += "\n..."
-            embed.add_field(name="Detalhes Estoque", value=detalhes_estoque, inline=False)
-            
-        await ctx.send(embed=embed)
-        
-        def check(m):
-            return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ['sim', 's']
-        
-        try:
-            await self.bot.wait_for('message', timeout=30.0, check=check)
-        except asyncio.TimeoutError:
-            await ctx.send("❌ Cancelado.")
-            return
-        
-        # Processa Pagamento
-        
-        # 1. Registra Histórico
-        supabase.table('historico_pagamentos').insert({
-            'funcionario_id': func['id'],
-            'tipo': 'estoque_acumulado',
-            'valor': float(total_pagar),
-            'descricao': f'Pagamento Acumulado (Estoque: R${valor_estoque:.2f} + Vendas: R${valor_pendente:.2f})'
-        }).execute()
-        
-        # 2. Atualiza Saldo do Funcionário
-        supabase.table('funcionarios').update({
-            'saldo': float(Decimal(str(func['saldo'])) + total_pagar)
-        }).eq('id', func['id']).execute()
-        
-        # 3. Limpa Estoque
-        if estoque:
-            supabase.table('estoque_produtos').delete().eq('funcionario_id', func['id']).eq('empresa_id', empresa['id']).execute()
-            
-        # 4. Atualiza Comissões Pendentes para Pagas
-        if pendentes_ids:
-            supabase.table('transacoes').update({'tipo': 'comissao_paga'}).in_('id', pendentes_ids).execute()
-        
-        await ctx.send(f"✅ {membro.mention} recebeu **R$ {total_pagar:.2f}**! Estoque zerado e comissões pagas.")
+        view = self.PayStockView(ctx, func['id'], empresa['id'], total_pagar, valor_estoque, valor_pendente, pendentes_ids)
+        await ctx.send(embed=embed, view=view)
 
     # ============================================
     # CAIXA / RELATÓRIO FINANCEIRO

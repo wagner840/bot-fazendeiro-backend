@@ -361,15 +361,20 @@ class AdminCog(commands.Cog, name="Administração"):
             if discord_id == str(ctx.author.id):
                 await ctx.send("❌ Você não pode remover seu próprio acesso.")
                 return
+            
+            # Need to get user DB ID first or use valid function
+            from database import get_usuario_frontend, desativar_usuario_frontend
+            
+            user_db = await get_usuario_frontend(discord_id, guild_id)
+            if not user_db:
+                await ctx.send(f"⚠️ {membro.display_name} não tinha acesso ao frontend.")
+                return
 
-            response = supabase.table('usuarios_frontend').update({
-                'ativo': False
-            }).eq('discord_id', discord_id).eq('guild_id', guild_id).execute()
-
-            if response.data:
+            if await desativar_usuario_frontend(user_db['id']):
                 await ctx.send(f"✅ Acesso de {membro.mention} ao frontend removido.")
             else:
-                await ctx.send(f"⚠️ {membro.display_name} não tinha acesso ao frontend.")
+                await ctx.send("❌ Erro ao desativar usuário no banco.")
+                
         except Exception as e:
             logger.error(f"Erro ao remover acesso: {e}")
             await ctx.send("❌ Erro ao remover acesso.")
@@ -382,19 +387,19 @@ class AdminCog(commands.Cog, name="Administração"):
         discord_id = str(membro.id)
 
         try:
-            existing = supabase.table('usuarios_frontend').select('*').eq(
-                'discord_id', discord_id
-            ).eq('guild_id', guild_id).execute()
+            from database import get_usuario_frontend, criar_usuario_frontend, atualizar_role_usuario_frontend
+            
+            user_db = await get_usuario_frontend(discord_id, guild_id)
 
-            if not existing.data:
+            if not user_db:
                 await criar_usuario_frontend(discord_id, guild_id, membro.display_name, 'admin')
                 await ctx.send(f"✅ {membro.mention} agora é **Admin** do frontend!")
             else:
-                supabase.table('usuarios_frontend').update({
-                    'role': 'admin',
-                    'ativo': True
-                }).eq('id', existing.data[0]['id']).execute()
-                await ctx.send(f"✅ {membro.mention} promovido para **Admin**!")
+                if await atualizar_role_usuario_frontend(user_db['id'], 'admin'):
+                    await ctx.send(f"✅ {membro.mention} promovido para **Admin**!")
+                else:
+                    await ctx.send("❌ Erro ao atualizar permissão.")
+                    
         except Exception as e:
             logger.error(f"Erro ao promover: {e}")
             await ctx.send("❌ Erro ao promover usuário.")

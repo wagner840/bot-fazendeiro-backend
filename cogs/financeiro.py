@@ -33,34 +33,32 @@ class PagamentoConfirmView(discord.ui.View):
 
     @discord.ui.button(label="Confirmar Pagamento", style=discord.ButtonStyle.green, emoji="✅")
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.value = True
-        self.stop()
+        from database import registrar_transacao # Import locally to avoid circle or ensure availability
         
-        # Lógica de Pagamento
         try:
-            # 1. Insert History
-            supabase.table('historico_pagamentos').insert({
-                'funcionario_id': self.func_db['id'],
-                'tipo': 'manual',
-                'valor': self.valor,
-                'descricao': self.descricao
-            }).execute()
-            
-            # 2. Update Balance
+            # 1. Update Balance (Manual calculation for now, but atomic RPC would be better)
             novo_saldo = float(Decimal(str(self.func_db['saldo'])) + Decimal(str(self.valor)))
             
             supabase.table('funcionarios').update({
                 'saldo': novo_saldo
             }).eq('id', self.func_db['id']).execute()
             
-            # 3. Success Feedback
-            embed = create_success_embed("Pagamento Realizado!")
-            embed.add_field(name="Funcionário", value=self.membro.mention)
-            embed.add_field(name="Valor", value=f"R$ {self.valor:.2f}")
-            embed.add_field(name="Descrição", value=self.descricao)
-            embed.set_footer(text=f"Novo Saldo: R$ {novo_saldo:.2f}")
+            # 2. Register Transaction (Using central function)
+            await registrar_transacao(
+                empresa_id=self.func_db['empresa_id'],
+                tipo='saida', # Payment to employee is specific, usually 'saida' or 'pagamento'
+                valor=self.valor,
+                descricao=f"Pagamento para {self.membro.display_name}: {self.descricao}",
+                funcionario_id=self.func_db['id']
+            )
+            
+            embed = create_success_embed(
+                f"Pagamento de R$ {self.valor:.2f} Realizado!", 
+                f"Funcionário: {self.membro.mention}\nNovo Saldo: R$ {novo_saldo:.2f}"
+            )
             
             await interaction.response.edit_message(embed=embed, view=None)
+            self.stop()
             
         except Exception as e:
             await handle_interaction_error(interaction, e)

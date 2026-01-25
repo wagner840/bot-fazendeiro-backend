@@ -230,28 +230,68 @@ class AdminCog(commands.Cog, name="Administração"):
 
         async def on_submit(self, interaction: discord.Interaction):
             nome_empresa = self.nome.value.strip()
+            guild = interaction.guild
             
             try:
+                # 1. Criar Categoria da Empresa
+                categoria_nome = f"🏭 {nome_empresa.upper()}"
+                categoria = await guild.create_category(categoria_nome)
+                
+                # 2. Criar Canal Principal
+                overwrites = {
+                    guild.default_role: discord.PermissionOverwrite(read_messages=True),
+                    guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+                }
+                canal_principal = await guild.create_text_channel(
+                    name="💼-chat-principal",
+                    category=categoria,
+                    overwrites=overwrites,
+                    topic=f"Canal principal da empresa {nome_empresa}"
+                )
+
+                # 3. Salvar no Banco
                 empresa = await criar_empresa(
                     self.guild_id,
                     nome_empresa,
                     self.tipo_id,
                     self.proprietario_id,
-                    servidor_id=self.servidor_id
+                    servidor_id=self.servidor_id,
+                    categoria_id=str(categoria.id),
+                    canal_principal_id=str(canal_principal.id)
                 )
 
                 if not empresa:
                     await interaction.response.send_message(embed=create_error_embed("Erro", "Erro ao criar empresa no banco."), ephemeral=True)
                     return
 
-                embed = create_success_embed("Nova Empresa Adicionada!")
-                embed.add_field(name="Nome", value=f"**{nome_empresa}**", inline=False)
-                embed.add_field(name="Tipo", value=self.tipo_nome, inline=True)
-                embed.add_field(name="ID", value=f"`{empresa['id']}`", inline=True)
+                embed = create_success_embed("Empresa Criada com Sucesso!")
+                embed.description = f"A empresa **{nome_empresa}** foi configurada.\n\n" \
+                                    f"📂 Categoria: {categoria.mention}\n" \
+                                    f"💬 Canal: {canal_principal.mention}\n\n" \
+                                    f"Use o canal principal para gerenciar sua empresa!"
                 
-                await interaction.response.send_message(embed=embed, ephemeral=False) # Public confirm
+                await interaction.response.send_message(embed=embed, ephemeral=False)
+                
+                # Mensagem de boas vindas no novo canal
+                welcome = discord.Embed(
+                    title=f"🏢 Bem-vindo à {nome_empresa}",
+                    description="Este é o canal principal da sua nova empresa.\n\n"
+                                "**Próximos Passos:**\n"
+                                "1. Use `!bemvindo @usuario` para adicionar funcionários.\n"
+                                "2. Use `!configurarprecos` para definir os valores.\n"
+                                "3. Dica: Use `!configmin`, `!configmedio` ou `!configmax` para configurar preços automaticamente!\n"
+                                "4. Comece a produzir com `/produzir`!",
+                    color=discord.Color.blue()
+                )
+                await canal_principal.send(embed=welcome)
+
             except Exception as e:
                 await handle_interaction_error(interaction, e)
+
+    class NovaEmpresaView(discord.ui.View):
+        def __init__(self, tipos: list, guild_id: str, servidor_id: int, proprietario_id: str):
+            super().__init__(timeout=180)
+            self.add_item(AdminCog.NovaEmpresaSelect(tipos, guild_id, servidor_id, proprietario_id))
 
     class NovaEmpresaSelect(discord.ui.Select):
         def __init__(self, tipos: list, guild_id: str, servidor_id: int, proprietario_id: str):
@@ -446,7 +486,7 @@ class AdminCog(commands.Cog, name="Administração"):
         guild = ctx.guild
         guild_id = str(guild.id)
 
-        # Verifica Admin
+        # 0. Check Admin Status (Always needed)
         eh_admin = False
         try:
              resp = supabase.table('usuarios_frontend').select('role').eq('discord_id', str(membro.id)).eq('guild_id', guild_id).execute()
@@ -454,29 +494,34 @@ class AdminCog(commands.Cog, name="Administração"):
                  eh_admin = True
         except: pass
 
-        prefixo = "admin" if eh_admin else "func"
-        # Normalize name for channel
-        clean_name = "".join(c for c in membro.display_name if c.isalnum() or c in [' ', '-', '_']).lower().replace(' ', '-')
-        nome_canal = f"{prefixo}-{clean_name}"
-
-        # Lógica de Categorias
-        nome_categoria = "👔 ADMINISTRAÇÃO" if eh_admin else "🏭 PRODUÇÃO"
-        categoria = discord.utils.get(guild.categories, name=nome_categoria)
+        # 1. Determinar Categoria Alvo (da empresa ou genérica)
+        categoria_id = empresa.get('categoria_id')
+        categoria = None
+        if categoria_id:
+            categoria = discord.utils.get(guild.categories, id=int(categoria_id))
         
         if not categoria:
-            try:
-                categoria = await guild.create_category(nome_categoria)
-            except Exception as e:
-                # Use interaction if available for reply
-                msg = f"⚠️ Não consegui criar a categoria '{nome_categoria}': {e}"
-                if interaction: await interaction.followup.send(msg)
-                else: await ctx.send(msg)
+            # Fallback para lógica antiga de nomes se o ID não bater ou não existir
+
+
+            nome_categoria = "👔 ADMINISTRAÇÃO" if eh_admin else "🏭 PRODUÇÃO"
+            categoria = discord.utils.get(guild.categories, name=nome_categoria)
+            
+            if not categoria:
+                try:
+                    categoria = await guild.create_category(nome_categoria)
+                except Exception as e:
+                    msg = f"⚠️ Não consegui criar a categoria '{nome_categoria}': {e}"
+                    if interaction: await interaction.followup.send(msg)
+                    else: await ctx.send(msg)
 
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
             membro: discord.PermissionOverwrite(read_messages=True, send_messages=True),
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
+
+        nome_canal = f"func-{membro.display_name.lower().replace(' ', '-')}"
 
         created_channel = None
         try:

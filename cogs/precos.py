@@ -45,8 +45,8 @@ class PrecosCog(commands.Cog, name="Preços"):
             self.add_item(self.preco_venda)
             
             self.preco_func = discord.ui.TextInput(
-                label="Pagamento Funcionário",
-                placeholder="Quanto o funcionário recebe?",
+                label="Pagamento Funcionário (%)",
+                placeholder="Ex: 25 para 25%",
                 default=str(produto.get('preco_pagamento_funcionario', '')),
                 required=True
             )
@@ -55,7 +55,11 @@ class PrecosCog(commands.Cog, name="Preços"):
         async def on_submit(self, interaction: discord.Interaction):
             try:
                 pv = float(self.preco_venda.value.replace(',', '.'))
-                pf = float(self.preco_func.value.replace(',', '.'))
+                # pf now represents percentage
+                porcentagem = float(self.preco_func.value.replace(',', '.').replace('%', ''))
+                
+                # Calculate actual value based on percentage
+                pf = round(pv * (porcentagem / 100), 2)
                 
                 await configurar_produto_empresa(self.empresa_id, self.produto['id'], pv, pf)
                 

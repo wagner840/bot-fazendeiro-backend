@@ -15,26 +15,46 @@ from database import get_empresas_by_guild
 # ============================================
 
 def empresa_configurada():
-    """Decorator que verifica se a empresa está configurada.
-    Suporta múltiplas empresas. Se houver apenas uma, define ctx.empresa.
-    Se houver várias, define ctx.empresas_lista para seleção posterior.
+    """Decorator que verifica se a empresa está configurada e associa ao contexto.
+    Agora detecta automaticamente a empresa baseada no Canal ou Categoria.
     """
     async def predicate(ctx):
         guild_id = str(ctx.guild.id)
+        channel_id = str(ctx.channel.id)
+        category_id = str(ctx.channel.category.id) if ctx.channel.category else None
+        
         empresas = await get_empresas_by_guild(guild_id)
         
         if not empresas:
-            await ctx.send("❌ Nenhuma empresa configurada. Use `!configurar` primeiro.")
+            await ctx.send("❌ Nenhuma empresa configurada neste servidor. Use `/configurar`.")
             return False
-            
+
+        # 1. Busca exata pelo Canal ou Categoria
+        empresa_alvo = None
+        for emp in empresas:
+            if emp.get('canal_principal_id') == channel_id or \
+               emp.get('categoria_id') == category_id:
+                empresa_alvo = emp
+                break
+        
+        if empresa_alvo:
+            ctx.empresa = empresa_alvo
+            ctx.empresas_lista = [empresa_alvo]
+            return True
+
+        # 2. Se não estiver em um canal próprio de empresa:
+        # Se for comando administrativo (como configurar), permite seguir para seleção
         if len(empresas) == 1:
             ctx.empresa = empresas[0]
             ctx.empresas_lista = empresas
+            return True
         else:
+            # Caso de múltiplas empresas e canal neutro
+            # Vamos permitir que o selecionar_empresa lide com isso
             ctx.empresa = None
             ctx.empresas_lista = empresas
-            
-        return True
+            return True
+
     return commands.check(predicate)
 
 

@@ -184,7 +184,16 @@ async def get_empresas_by_guild(guild_id: str) -> List[Dict]:
         return []
 
 
-async def criar_empresa(guild_id: str, nome: str, tipo_empresa_id: int, proprietario_id: str, servidor_id: int = None, modo_pagamento: str = 'producao') -> Optional[Dict]:
+async def criar_empresa(
+    guild_id: str, 
+    nome: str, 
+    tipo_empresa_id: int, 
+    proprietario_id: str, 
+    servidor_id: int = None, 
+    modo_pagamento: str = 'producao',
+    categoria_id: str = None,
+    canal_principal_id: str = None
+) -> Optional[Dict]:
     """Cria uma nova empresa para o servidor."""
     try:
         data = {
@@ -192,7 +201,9 @@ async def criar_empresa(guild_id: str, nome: str, tipo_empresa_id: int, propriet
             'nome': nome,
             'tipo_empresa_id': tipo_empresa_id,
             'proprietario_discord_id': proprietario_id,
-            'modo_pagamento': modo_pagamento
+            'modo_pagamento': modo_pagamento,
+            'categoria_id': categoria_id,
+            'canal_principal_id': canal_principal_id
         }
 
         if servidor_id:
@@ -367,80 +378,56 @@ async def adicionar_ao_estoque(funcionario_id: int, empresa_id: int, codigo: str
             return None
         
         produto = produtos[codigo.lower()]
-        
-        estoque = supabase.table('estoque_produtos').select('*').eq(
+        codigo_limpo = codigo.lower()
+
+        # 1. Tenta buscar o item existente
+        response = supabase.table('estoque_produtos').select('*').eq(
             'funcionario_id', funcionario_id
-        ).eq('produto_codigo', codigo.lower()).eq('empresa_id', empresa_id).execute()
-        
-        # Upsert (insert or update)
-        response = supabase.table('estoque_produtos').upsert({
-            'funcionario_id': funcionario_id,
-            'empresa_id': empresa_id,
-            'produto_codigo': codigo.lower(),
-            'quantidade': quantidade, # Note: Upsert overwrites by default. We need increment.
-            # Upsert in Supabase (PostgREST) replaces the row. It implies we know the final value.
-            # Use RCP (Remote Procedure Call) if we want atomic increment without read, 
-            # OR we stick to read-modify-write but handle the exception.
-            # However, for this simple bot, upserting the CALCULATED value is fine if we just want to avoid "duplicate key" on insert.
-            # BUT: If we use upsert, we need to know the current value to add to it.
-            # The previous logic was: READ -> IF EXIST UPDATE -> ELSE INSERT.
-            # The failure happened because between READ and INSERT, someone else inserted.
-            # So we should try to INSERT, and if it fails (conflict), we UPDATE.
-            # OR better: use an RPC for "increment_stock".
-            # For now, let's just use the current logic but wrap INSERT in try/catch or use upsert with the read value.
-        }).execute()
-        
-        # ACTUALLY, checking the error log:
-        # duplicate key value violates unique constraint
-        # This happened in the TEST script which was doing raw inserts.
-        # The database.py function `adicionar_ao_estoque` does READ then INSERT/UPDATE.
-        # So if we change the TEST to use THIS function, it should handle it (mostly).
-        # But to be safer, let's improve this function to handle the race condition.
-        
-        # Existing logic:
-        # estoque = select...
-        # if estoque: update...
-        # else: insert...
-        
-        # Improved logic:
-        # Try to select.
-        # If found, update.
-        # If not, try to insert. If insert fails (race), retry update.
-        
-        current_qtd = 0
-        existing_id = None
-        
-        if estoque.data:
-            current_qtd = estoque.data[0]['quantidade']
-            existing_id = estoque.data[0]['id']
+        ).eq('produto_codigo', codigo_limpo).eq('empresa_id', empresa_id).execute()
+
+        if response.data:
+            # 2. Se existe, atualiza (incrementa)
+            item_id = response.data[0]['id']
+            nova_qtd = response.data[0]['quantidade'] + quantidade
             
-        nova_qtd = current_qtd + quantidade
-        
-        if existing_id:
-             supabase.table('estoque_produtos').update({
+            res_upd = supabase.table('estoque_produtos').update({
                 'quantidade': nova_qtd,
                 'data_atualizacao': datetime.utcnow().isoformat()
-            }).eq('id', existing_id).execute()
+            }).eq('id', item_id).execute()
+            
+            final_qtd = res_upd.data[0]['quantidade'] if res_upd.data else nova_qtd
         else:
-             # Try insert, if it fails, it means it was created in between, so we update
+            # 3. Se não existe, tenta inserir
             try:
-                supabase.table('estoque_produtos').insert({
+                res_ins = supabase.table('estoque_produtos').insert({
                     'funcionario_id': funcionario_id,
                     'empresa_id': empresa_id,
-                    'produto_codigo': codigo.lower(),
+                    'produto_codigo': codigo_limpo,
                     'quantidade': quantidade
                 }).execute()
-            except Exception:
-                # Fallback: fetch again and update
-                 retry = supabase.table('estoque_produtos').select('*').eq(
+                final_qtd = res_ins.data[0]['quantidade'] if res_ins.data else quantidade
+            except Exception as e:
+                # 4. Fallback para o caso de inserção simultânea (Race Condition)
+                # O erro 23505 é Unique Violation no Postgres
+                logger.warning(f"Race condition detected in adicionar_ao_estoque for func={funcionario_id} prod={codigo_limpo}. Retrying update.")
+                
+                # Busca novamente
+                retry = supabase.table('estoque_produtos').select('*').eq(
                     'funcionario_id', funcionario_id
-                ).eq('produto_codigo', codigo.lower()).eq('empresa_id', empresa_id).execute()
-                 if retry.data:
-                     n_qtd = retry.data[0]['quantidade'] + quantidade
-                     supabase.table('estoque_produtos').update({'quantidade': n_qtd}).eq('id', retry.data[0]['id']).execute()
-                     nova_qtd = n_qtd
-            
-        return {'quantidade': nova_qtd, 'nome': produto['produtos_referencia']['nome']}
+                ).eq('produto_codigo', codigo_limpo).eq('empresa_id', empresa_id).execute()
+                
+                if retry.data:
+                    item_id = retry.data[0]['id']
+                    final_qtd = retry.data[0]['quantidade'] + quantidade
+                    supabase.table('estoque_produtos').update({
+                        'quantidade': final_qtd,
+                        'data_atualizacao': datetime.utcnow().isoformat()
+                    }).eq('id', item_id).execute()
+                else:
+                    # Se mesmo assim não achar, algo muito estranho aconteceu
+                    raise e
+
+        return {'quantidade': final_qtd, 'nome': produto['produtos_referencia']['nome']}
     except Exception as e:
         logger.error(f"Erro ao adicionar estoque: {e}")
         return None
@@ -614,7 +601,7 @@ async def criar_encomenda(empresa_id: int, comprador: str, itens: List[Dict]) ->
         response = supabase.table('encomendas').insert({
             'empresa_id': empresa_id,
             'comprador': comprador,
-            'itens': itens,
+            'itens_json': itens,
             'valor_total': valor_total,
             'status': 'pendente'
         }).execute()

@@ -55,19 +55,42 @@ async def on_ready():
     )
 
 
+class SetupWizardView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="⚙️ Iniciar Configuração", style=discord.ButtonStyle.green, custom_id="setup_start")
+    async def start_setup(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Envia uma mensagem instruindo o usuário a usar o comando ou trigga manualmente
+        # Como o bot usa hybrid commands, podemos sugerir o uso do slash command /configurar
+        await interaction.response.send_message(
+            "🚀 Excelente! Por favor, use o comando `/configurar` para começarmos a criar sua primeira empresa.",
+            ephemeral=True
+        )
+
 @bot.event
 async def on_guild_join(guild):
     """Quando bot entra em novo servidor."""
     canal = guild.system_channel or guild.text_channels[0]
     
     embed = discord.Embed(
-        title="🏢 Bot Multi-Empresa Downtown",
-        description="Olá! Sou um bot de gerenciamento econômico para roleplay.\n\n"
-                    "**Para começar**, um administrador deve configurar o tipo de empresa:\n"
-                    "`!configurar`",
+        title="🏢 Bem-vindo ao Bot Fazendeiro!",
+        description=(
+            "Obrigado por me adicionar! Sou o sistema definitivo de gestão para o seu servidor.\n\n"
+            "**Como funciona a Isolação Multi-Empresa?**\n"
+            "• Cada empresa terá sua própria categoria e canais exclusivos.\n"
+            "• Funcionários terão canais privados organizados por empresa.\n"
+            "• Comandos em canais de empresa detectam qual empresa você está operando.\n\n"
+            "**Pronto para começar?**\n"
+            "Clique no botão abaixo para configurar sua primeira empresa."
+        ),
         color=discord.Color.blue()
     )
-    await canal.send(embed=embed)
+    embed.set_thumbnail(url=bot.user.avatar.url if bot.user.avatar else None)
+    embed.set_footer(text="Bot Fazendeiro | Advanced Management Solutions")
+    
+    view = SetupWizardView()
+    await canal.send(embed=embed, view=view)
 
 
 # ============================================
@@ -157,7 +180,7 @@ async def on_command_error(ctx, error):
 # INTERACTIVE HELP SYSTEM
 # ============================================
 
-from ui_utils import BaseMenuView, EMOJI_INFO, EMOJI_SUCCESS
+from ui_utils import BaseMenuView, EMOJI_INFO, EMOJI_SUCCESS, EMOJI_LOADING
 
 class HelpSelect(discord.ui.Select):
     def __init__(self):
@@ -242,7 +265,7 @@ class HelpMenuView(BaseMenuView):
     def __init__(self, user_id):
         super().__init__(user_id=user_id)
         self.add_item(HelpSelect())
-        self.add_item(discord.ui.Button(label="Painel Web", url="http://localhost:3000", row=1))
+        self.add_item(discord.ui.Button(label="Painel Web", url="http://fazendabot.einsof7.com/dashboard/", row=1))
 
 @bot.command(name='help', aliases=['ajuda', 'comandos'])
 async def ajuda(ctx):
@@ -258,15 +281,25 @@ async def ajuda(ctx):
 
 @bot.command(name='sync')
 @commands.has_permissions(administrator=True)
-async def sync(ctx):
-    """Sincroniza os slash commands manualmente."""
-    msg = await ctx.send(f"{EMOJI_LOADING} Sincronizando comandos...")
-    try:
-        synced = await bot.tree.sync()
-        await msg.edit(content=f"{EMOJI_SUCCESS} {len(synced)} comandos sincronizados!")
-    except Exception as e:
-        await msg.edit(content=f"❌ Erro ao sincronizar: {e}")
-
+async def sync(ctx, guild_id: int = None):
+    """Sincroniza slash commands (Atual: !sync | Global: !sync global)."""
+    if guild_id == "global":
+        msg = await ctx.send(f"{EMOJI_LOADING} Sincronizando GLOBALMENTE (pode demorar)...")
+        try:
+            synced = await bot.tree.sync()
+            await msg.edit(content=f"{EMOJI_SUCCESS} Globais: {len(synced)} comandos sincronizados!")
+        except Exception as e:
+            await msg.edit(content=f"❌ Erro Global: {e}")
+    else:
+        # Sync to current guild (Instant)
+        guild = ctx.guild
+        msg = await ctx.send(f"{EMOJI_LOADING} Sincronizando neste servidor ({guild.name})...")
+        try:
+            bot.tree.copy_global_to(guild=guild)
+            synced = await bot.tree.sync(guild=guild)
+            await msg.edit(content=f"{EMOJI_SUCCESS} Sincronizados {len(synced)} comandos para este servidor!")
+        except Exception as e:
+            await msg.edit(content=f"❌ Erro Local: {e}")
 
 
 @bot.command(name='empresa', aliases=['info'])

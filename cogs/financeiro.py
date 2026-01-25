@@ -13,6 +13,64 @@ from database import (
     get_estoque_funcionario
 )
 from utils import empresa_configurada, selecionar_empresa
+from ui_utils import create_success_embed, create_error_embed, create_warning_embed, handle_interaction_error
+
+class PagamentoConfirmView(discord.ui.View):
+    def __init__(self, ctx, func_db: dict, membro: discord.Member, valor: float, descricao: str):
+        super().__init__(timeout=60)
+        self.ctx = ctx
+        self.func_db = func_db
+        self.membro = membro
+        self.valor = valor
+        self.descricao = descricao
+        self.value = None
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user != self.ctx.author:
+            await interaction.response.send_message("Apenas quem iniciou o comando pode usar os botões.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Confirmar Pagamento", style=discord.ButtonStyle.green, emoji="✅")
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = True
+        self.stop()
+        
+        # Lógica de Pagamento
+        try:
+            # 1. Insert History
+            supabase.table('historico_pagamentos').insert({
+                'funcionario_id': self.func_db['id'],
+                'tipo': 'manual',
+                'valor': self.valor,
+                'descricao': self.descricao
+            }).execute()
+            
+            # 2. Update Balance
+            novo_saldo = float(Decimal(str(self.func_db['saldo'])) + Decimal(str(self.valor)))
+            
+            supabase.table('funcionarios').update({
+                'saldo': novo_saldo
+            }).eq('id', self.func_db['id']).execute()
+            
+            # 3. Success Feedback
+            embed = create_success_embed("Pagamento Realizado!")
+            embed.add_field(name="Funcionário", value=self.membro.mention)
+            embed.add_field(name="Valor", value=f"R$ {self.valor:.2f}")
+            embed.add_field(name="Descrição", value=self.descricao)
+            embed.set_footer(text=f"Novo Saldo: R$ {novo_saldo:.2f}")
+            
+            await interaction.response.edit_message(embed=embed, view=None)
+            
+        except Exception as e:
+            await handle_interaction_error(interaction, e)
+
+    @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.red, emoji="❌")
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = False
+        self.stop()
+        embed = create_warning_embed("Cancelado", "Pagamento cancelado pelo administrador.")
+        await interaction.response.edit_message(embed=embed, view=None)
 
 
 class FinanceiroCog(commands.Cog, name="Financeiro"):
@@ -25,40 +83,29 @@ class FinanceiroCog(commands.Cog, name="Financeiro"):
     # PAGAR FUNCIONÁRIO
     # ============================================
 
-    @commands.command(name='pagar', aliases=['pagamento'])
+    @commands.hybrid_command(name='pagar', aliases=['pagamento'], description="Realiza pagamento manual a um funcionário.")
     @commands.has_permissions(manage_messages=True)
     @empresa_configurada()
     async def pagar_funcionario(self, ctx, membro: discord.Member, valor: float, *, descricao: str = "Pagamento"):
-        """Registra pagamento. Uso: !pagar @pessoa 100 Descrição"""
+        """Registra pagamento manual com confirmação."""
         empresa = await selecionar_empresa(ctx)
-        if not empresa:
-            return
+        if not empresa: return
         
         func = await get_funcionario_by_discord_id(str(membro.id))
         if not func:
-            await ctx.send(f"❌ {membro.display_name} não cadastrado.")
+            await ctx.send(embed=create_error_embed("Erro", f"{membro.display_name} não cadastrado."), ephemeral=True)
             return
         
         if valor <= 0:
-            await ctx.send("❌ Valor deve ser positivo.")
+            await ctx.send(embed=create_error_embed("Erro", "Valor deve ser positivo."), ephemeral=True)
             return
         
-        supabase.table('historico_pagamentos').insert({
-            'funcionario_id': func['id'],
-            'tipo': 'manual',
-            'valor': valor,
-            'descricao': descricao
-        }).execute()
+        # Envia View de Confirmação
+        view = PagamentoConfirmView(ctx, func, membro, valor, descricao)
+        embed = create_warning_embed("Confirmar Pagamento?", f"Você está prestes a pagar **R$ {valor:.2f}** para {membro.mention}.")
+        embed.add_field(name="Motivo", value=descricao)
         
-        supabase.table('funcionarios').update({
-            'saldo': float(Decimal(str(func['saldo'])) + Decimal(str(valor)))
-        }).eq('id', func['id']).execute()
-        
-        embed = discord.Embed(title="💵 Pagamento Registrado!", color=discord.Color.green())
-        embed.add_field(name="Funcionário", value=membro.mention)
-        embed.add_field(name="Valor", value=f"R$ {valor:.2f}")
-        embed.add_field(name="Descrição", value=descricao, inline=False)
-        await ctx.send(embed=embed)
+        await ctx.send(embed=embed, view=view)
 
     # ============================================
     # PAGAR ESTOQUE
@@ -171,16 +218,19 @@ class FinanceiroCog(commands.Cog, name="Financeiro"):
         total_estoque = Decimal('0')
         detalhes = []
         
-        for func in funcionarios.data:
-            saldo = Decimal(str(func['saldo']))
-            total_saldos += saldo
-            
-            estoque = await get_estoque_funcionario(func['id'], empresa['id'])
-            valor_estoque = sum(Decimal(str(i['preco_funcionario'])) * i['quantidade'] for i in estoque)
-            total_estoque += valor_estoque
-            
-            if saldo > 0 or valor_estoque > 0:
-                detalhes.append({'nome': func['nome'], 'saldo': saldo, 'estoque': valor_estoque})
+        if funcionarios.data:
+            for func in funcionarios.data:
+                saldo = Decimal(str(func['saldo']))
+                total_saldos += saldo
+                
+                estoque = await get_estoque_funcionario(func['id'], empresa['id'])
+                valor_estoque = Decimal('0')
+                if estoque:
+                    valor_estoque = sum(Decimal(str(i['preco_funcionario'])) * i['quantidade'] for i in estoque)
+                total_estoque += valor_estoque
+                
+                if saldo > 0 or valor_estoque > 0:
+                    detalhes.append({'nome': func['nome'], 'saldo': saldo, 'estoque': valor_estoque})
         
         embed = discord.Embed(title=f"📊 Financeiro - {empresa['nome']}", color=discord.Color.gold())
         

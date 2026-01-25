@@ -11,6 +11,7 @@ from discord.ext import commands
 from config import DISCORD_TOKEN, supabase
 from database import get_empresas_by_guild, get_produtos_empresa, verificar_assinatura_servidor
 from utils import selecionar_empresa
+from ui_utils import create_error_embed
 from logging_config import logger
 
 
@@ -38,6 +39,13 @@ async def on_ready():
     logger.info(f'  Usuario: {bot.user.name}')
     logger.info(f'  Servidores: {len(bot.guilds)}')
     logger.info('============================================')
+    
+    # Sync Slash Commands
+    try:
+        synced = await bot.tree.sync()
+        logger.info(f"  [SYNC] {len(synced)} slash commands sincronizados.")
+    except Exception as e:
+        logger.error(f"  [ERRO] Falha ao sincronizar commands: {e}")
     
     await bot.change_presence(
         activity=discord.Activity(
@@ -81,12 +89,7 @@ CHECKOUT_URL = "http://localhost:3000/checkout"
 
 def criar_embed_bloqueio():
     """Cria embed de bloqueio por falta de assinatura."""
-    embed = discord.Embed(
-        title="⚠️ Assinatura Necessária",
-        description="Este servidor não possui uma assinatura ativa do Bot Fazendeiro.\n\n"
-                    "Para continuar usando o bot, é necessário renovar a assinatura.",
-        color=discord.Color.red()
-    )
+    embed = create_error_embed("Assinatura Necessária", "Este servidor não possui uma assinatura ativa.")
     embed.add_field(
         name="🔗 Link para Pagamento",
         value=f"[Clique aqui para assinar]({CHECKOUT_URL})",
@@ -132,9 +135,9 @@ async def verificar_assinatura_global(ctx):
 async def on_command_error(ctx, error):
     """Tratamento de erros."""
     if isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send(f"❌ Argumento faltando: `{error.param.name}`")
+        await ctx.send(embed=create_error_embed("Erro", f"Argumento faltando: `{error.param.name}`"))
     elif isinstance(error, commands.MissingPermissions):
-        await ctx.send("❌ Você não tem permissão.")
+        await ctx.send(embed=create_error_embed("Permissão Negada", "Você não tem permissão para usar este comando."))
     elif isinstance(error, commands.CommandNotFound):
         pass
     elif isinstance(error, commands.CheckFailure):
@@ -142,7 +145,7 @@ async def on_command_error(ctx, error):
         pass
     else:
         logger.error(f"Erro no comando: {error}")
-        await ctx.send("❌ Ocorreu um erro.")
+        await ctx.send(embed=create_error_embed("Erro Inesperado", "Ocorreu um erro ao processar o comando."))
 
 
 # ============================================

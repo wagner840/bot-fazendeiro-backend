@@ -142,14 +142,52 @@ async def desativar_usuario_frontend(usuario_id: int) -> bool:
 # FUNÇÕES DE EMPRESA
 # ============================================
 
-async def get_tipos_empresa() -> List[Dict]:
-    """Obtém todos os tipos de empresa disponíveis."""
+
+async def get_tipos_empresa(guild_id: str = None) -> List[Dict]:
+    """Obtém todos os tipos de empresa disponíveis para a base do servidor."""
     try:
-        response = supabase.table('tipos_empresa').select('*').eq('ativo', True).order('nome').execute()
+        base_id = 1 # Default Downtown
+        if guild_id:
+             servidor = await get_servidor_by_guild(guild_id)
+             if servidor:
+                 base_id = servidor.get('base_redm_id', 1)
+        
+        response = supabase.table('tipos_empresa').select('*').eq('ativo', True).eq('base_redm_id', base_id).order('nome').execute()
         return response.data
     except Exception as e:
         logger.error(f"Erro ao buscar tipos de empresa: {e}")
         return []
+
+
+async def get_bases_redm() -> List[Dict]:
+    """Obtém todas as bases REDM disponíveis (Downtown, Valiria, etc)."""
+    try:
+        response = supabase.table('bases_redm').select('*').eq('ativo', True).order('id').execute()
+        return response.data or []
+    except Exception as e:
+        logger.error(f"Erro ao buscar bases REDM: {e}")
+        return []
+
+
+async def atualizar_base_servidor(guild_id: str, base_id: int) -> bool:
+    """Atualiza a base REDM de um servidor."""
+    try:
+        # Primeiro garante que o servidor existe
+        servidor = await get_or_create_servidor(guild_id, f"Guild {guild_id}", "0")
+        if not servidor: return False
+
+        supabase.table('servidores').update({
+            'base_redm_id': base_id
+        }).eq('guild_id', guild_id).execute()
+        
+        # Limpa cache para refletir mudança
+        if guild_id in servidores_cache:
+            del servidores_cache[guild_id]
+            
+        return True
+    except Exception as e:
+        logger.error(f"Erro ao atualizar base do servidor: {e}")
+        return False
 
 
 async def get_empresa_by_guild(guild_id: str) -> Optional[Dict]:

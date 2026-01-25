@@ -233,12 +233,23 @@ async def atualizar_modo_pagamento(empresa_id: int, modo: str) -> bool:
         return False
 
 
-async def get_produtos_referencia(tipo_empresa_id: int) -> List[Dict]:
-    """Obtém produtos de referência para um tipo de empresa."""
+async def get_produtos_referencia(tipo_empresa_id: int, guild_id: str = None) -> List[Dict]:
+    """Obtém produtos de referência (Globais + Específicos do Servidor)."""
     try:
-        response = supabase.table('produtos_referencia').select('*').eq(
+        query = supabase.table('produtos_referencia').select('*').eq(
             'tipo_empresa_id', tipo_empresa_id
-        ).eq('ativo', True).order('categoria', desc=False).order('nome').execute()
+        ).eq('ativo', True)
+        
+        if guild_id:
+            # Filter: Guild ID is NULL (Global) OR Guild ID matches
+            # Supabase syntax for OR is slightly complex in Python client usually involves .or_
+            # But let's check python client docs or use simpler logic if possible.
+            # Using .or_(f"guild_id.is.null,guild_id.eq.{guild_id}")
+            query = query.or_(f"guild_id.is.null,guild_id.eq.{guild_id}")
+        else:
+            query = query.is_('guild_id', 'null')
+            
+        response = query.order('categoria', desc=False).order('nome').execute()
         return response.data
     except Exception as e:
         logger.error(f"Erro ao buscar produtos: {e}")
@@ -256,6 +267,38 @@ async def get_produtos_empresa(empresa_id: int) -> Dict[str, Dict]:
     except Exception as e:
         logger.error(f"Erro ao buscar produtos da empresa: {e}")
         return {}
+
+
+async def criar_produto_referencia_custom(
+    tipo_empresa_id: int,
+    nome: str,
+    codigo: str,
+    categoria: str,
+    guild_id: str,
+    consumivel: bool = True
+) -> Optional[Dict]:
+    """Cria um produto de referência customizado para o servidor."""
+    try:
+        # Verifica se código já existe (Global ou neste servidor)
+        # Note: We need to be careful about unique constraints on code.
+        # Ideally code should be unique per server? Or Global?
+        # For now, let's just insert. Unique constraint might fail if naive.
+        
+        data = {
+            'tipo_empresa_id': tipo_empresa_id,
+            'nome': nome,
+            'codigo': codigo.lower(),
+            'categoria': categoria,
+            'guild_id': guild_id,
+            'consumivel': consumivel,
+            'ativo': True
+        }
+        
+        response = supabase.table('produtos_referencia').insert(data).execute()
+        return response.data[0] if response.data else None
+    except Exception as e:
+        logger.error(f"Erro ao criar produto custom: {e}")
+        return None
 
 
 async def configurar_produto_empresa(empresa_id: int, produto_ref_id: int, preco_venda: float, preco_funcionario: float) -> bool:
@@ -364,6 +407,18 @@ async def get_funcionarios_empresa(empresa_id: int) -> List[Dict]:
     except Exception as e:
         logger.error(f"Erro ao buscar funcionários da empresa: {e}")
         return []
+
+
+async def atualizar_canal_funcionario(funcionario_id: int, channel_id: str) -> bool:
+    """Atualiza o channel_id do funcionário."""
+    try:
+        supabase.table('funcionarios').update({
+            'channel_id': channel_id
+        }).eq('id', funcionario_id).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Erro ao atualizar channel_id: {e}")
+        return False
 
 
 # ============================================

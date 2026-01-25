@@ -152,64 +152,121 @@ async def on_command_error(ctx, error):
 # COMANDO DE AJUDA
 # ============================================
 
+
+# ============================================
+# INTERACTIVE HELP SYSTEM
+# ============================================
+
+from ui_utils import BaseMenuView, EMOJI_INFO, EMOJI_SUCCESS
+
+class HelpSelect(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="Visão Geral", value="geral", emoji="ℹ️", description="Comandos básicos"),
+            discord.SelectOption(label="Produção & Encomendas", value="producao", emoji="🏭", description="Fábrica, Estoque e Vendas"),
+            discord.SelectOption(label="Financeiro", value="financeiro", emoji="💰", description="Pagamentos e Caixa"),
+            discord.SelectOption(label="Administração", value="admin", emoji="🛡️", description="Empresas e Equipe"),
+            discord.SelectOption(label="Preços & Comissão", value="precos", emoji="💲", description="Configuração de Valores"),
+            discord.SelectOption(label="Assinatura", value="assinatura", emoji="🔐", description="Planos e Status")
+        ]
+        super().__init__(placeholder="Escolha uma categoria...", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        val = self.values[0]
+        embed = discord.Embed(color=discord.Color.blue())
+        
+        if val == "geral":
+            embed.title = "ℹ️ Visão Geral"
+            embed.description = (
+                "**Comandos Básicos:**\n"
+                "`!empresa` - Ver dados da empresa ativa\n"
+                "`!help` - Abrir este menu\n"
+                "\n**Para onde ir?**\n"
+                "Use o menu abaixo para explorar funcionalidades específicas."
+            )
+        elif val == "producao":
+            embed.title = "🏭 Produção & Encomendas"
+            embed.description = (
+                "**Menu Principal:** `/produzir`\n"
+                "*Gerencie toda a fabricação aqui.*\n\n"
+                "**Vendas:** `/encomenda`\n"
+                "*Crie pedidos para clientes.*\n\n"
+                "**Outros:**\n"
+                "`!estoque` - Seu inventário pessoal\n"
+                "`!produtos` - Catálogo de referência\n"
+                "`!entregar [id]` - Finalizar entrega\n"
+                "`!deletar [cod]` - Descartar item"
+            )
+        elif val == "financeiro":
+            embed.title = "💰 Financeiro"
+            embed.description = (
+                "**Pagamentos:** `/pagar`\n"
+                "*Wizard seguro para pagar funcionários.*\n\n"
+                "**Fluxo de Caixa:**\n"
+                "`!caixa` - Ver entradas e saídas\n"
+                "`!pagarestoque` - Pagar acumulado de produção"
+            )
+        elif val == "admin":
+            embed.title = "🛡️ Administração"
+            embed.description = (
+                "**Configuração:**\n"
+                "`/novaempresa` - Criar nova empresa\n"
+                "`!configurar` - Setup inicial\n"
+                "`!modopagamento` - Mudar modo (Produção/Entrega)\n\n"
+                "**Equipe:**\n"
+                "`!usuarios` - Ver lista\n"
+                "`!bemvindo` - Adicionar funcionário\n"
+                "`!promover` - Dar cargo de Admin"
+            )
+        elif val == "precos":
+            embed.title = "💲 Preços & Comissão"
+            embed.description = (
+                "**Preços:** `!configurarprecos`\n"
+                "*Define valor de venda e pagamento.*\n\n"
+                "**Comissão:** `!comissao`\n"
+                "*Define % global de repasse.*\n\n"
+                "**Tabelas:**\n"
+                "`!verprecos` - Ver tabela atual"
+            )
+        elif val == "assinatura":
+            embed.title = "🔐 Assinatura SaaS"
+            embed.description = (
+                "**Status:** `!assinatura`\n"
+                "**Assinar:** `!assinarpix` ou `!planos`\n"
+                "*Mantenha seu servidor ativo para continuar usando o bot.*"
+            )
+
+        await interaction.response.edit_message(embed=embed)
+
+class HelpMenuView(BaseMenuView):
+    def __init__(self, user_id):
+        super().__init__(user_id=user_id)
+        self.add_item(HelpSelect())
+        self.add_item(discord.ui.Button(label="Painel Web", url="http://localhost:3000", row=1))
+
 @bot.command(name='help', aliases=['ajuda', 'comandos'])
 async def ajuda(ctx):
-    """Mostra o menu principal do bot."""
-    guild_id = str(ctx.guild.id)
-    empresas = await get_empresas_by_guild(guild_id)
-    
-    nome_empresa = "Não configurada"
-    if empresas:
-        if len(empresas) == 1:
-            nome_empresa = empresas[0]['nome']
-        else:
-            nome_empresa = f"{len(empresas)} empresas"
-
+    """Abre o menu interativo de ajuda."""
     embed = discord.Embed(
-        title="🏢 Bot Multi-Empresa Downtown",
-        description=f"**Empresa:** {nome_empresa}\nVersão: 3.0 (UI Interativa)",
+        title="🏢 Central de Ajuda Downtown",
+        description="Selecione uma categoria abaixo para ver os comandos.",
         color=discord.Color.blue()
     )
-
-    embed.add_field(
-        name="🖥️ Menus Interativos (Principais)",
-        value="`/produzir` - **Painel de Produção** (Fábrica)\n"
-              "`/encomenda` - **Painel de Vendas** (Encomendas)\n"
-              "`/pagar` - **Assistente de Pagamento** (Financeiro)\n"
-              "`/novaempresa` - **Criador de Empresa** (Admin)",
-        inline=False
-    )
-
-    embed.add_field(
-        name="📋 Comandos Rápidos",
-        value="`!estoque` - Ver seu estoque\n"
-              "`!produtos` - Ver preços e códigos\n"
-              "`!assinatura` - Ver status do bot\n"
-              "`!help` - Ver esta mensagem",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="🛠️ Administração",
-        value="Use `!configurar` ou `/novaempresa` para começar.\n"
-              "Outros comandos: `!bemvindo`, `!comissao`, `!usuarios`.",
-        inline=False
-    )
-
-    embed.set_footer(text="💡 Use os comandos com '/' para abrir os menus interativos.")
-    await ctx.send(embed=embed)
+    view = HelpMenuView(user_id=ctx.author.id)
+    await ctx.send(embed=embed, view=view)
 
 
 @bot.command(name='sync')
 @commands.has_permissions(administrator=True)
 async def sync(ctx):
     """Sincroniza os slash commands manualmente."""
-    msg = await ctx.send("⏳ Sincronizando comandos...")
+    msg = await ctx.send(f"{EMOJI_LOADING} Sincronizando comandos...")
     try:
         synced = await bot.tree.sync()
-        await msg.edit(content=f"✅ {len(synced)} comandos sincronizados com sucesso!")
+        await msg.edit(content=f"{EMOJI_SUCCESS} {len(synced)} comandos sincronizados!")
     except Exception as e:
         await msg.edit(content=f"❌ Erro ao sincronizar: {e}")
+
 
 
 @bot.command(name='empresa', aliases=['info'])

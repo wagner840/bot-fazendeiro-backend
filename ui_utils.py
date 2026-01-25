@@ -65,4 +65,61 @@ async def handle_interaction_error(interaction: discord.Interaction, error: Exce
         else:
             await interaction.response.send_message(embed=embed, ephemeral=True)
     except:
-        pass # If we can't send, we can't do much
+        pass
+
+# ============================================
+# BASE UI COMPONENTS
+# ============================================
+
+class BaseMenuView(View):
+    """
+    Base View class enforcing:
+    1. Interaction check (only author can use)
+    2. Timeout handling (disable items)
+    3. Error handling
+    """
+    def __init__(self, *, user_id: int, timeout: int = 180):
+        super().__init__(timeout=timeout)
+        self.user_id = user_id
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message(
+                f"{EMOJI_ERROR} Apenas quem abriu este menu pode interagir.",
+                ephemeral=True
+            )
+            return False
+        return True
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        # Note: We can't edit the message easily without reference, 
+        # so we rely on the user trying to click and failing, 
+        # or we pass message ref in future if needed.
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item):
+        await handle_interaction_error(interaction, error)
+
+# ============================================
+# GENERIC VIEWS
+# ============================================
+
+class ConfirmView(BaseMenuView):
+    """Generic confirmation view."""
+    def __init__(self, user_id: int, confirm_label="Confirmar", cancel_label="Cancelar"):
+        super().__init__(user_id=user_id, timeout=60)
+        self.value = None
+
+    @discord.ui.button(label="Confirmar", style=discord.ButtonStyle.green, emoji=EMOJI_SUCCESS)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = True
+        self.stop()
+        await interaction.response.defer() # Acknowledge
+
+    @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.red, emoji=EMOJI_ERROR)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = False
+        self.stop()
+        await interaction.response.defer() # Acknowledge
+

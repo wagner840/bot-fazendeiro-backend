@@ -18,7 +18,7 @@ from database import (
     get_or_create_funcionario
 )
 from utils import empresa_configurada, selecionar_empresa
-from ui_utils import create_success_embed, create_error_embed, create_info_embed, handle_interaction_error
+from ui_utils import create_success_embed, create_error_embed, create_info_embed, handle_interaction_error, BaseMenuView
 from logging_config import logger
 
 
@@ -280,10 +280,8 @@ class AdminCog(commands.Cog, name="Administração"):
             )
             await interaction.response.send_modal(modal)
 
-    class NovaEmpresaView(discord.ui.View):
-        def __init__(self, tipos: list, guild_id: str, servidor_id: int, proprietario_id: str):
-            super().__init__(timeout=180)
-            self.add_item(AdminCog.NovaEmpresaSelect(tipos, guild_id, servidor_id, proprietario_id))
+    # View replaced by PaymentModeView section
+
 
     @commands.hybrid_command(name='novaempresa', description="Cria uma nova empresa no servidor.")
     @commands.has_permissions(administrator=True)
@@ -425,10 +423,8 @@ class AdminCog(commands.Cog, name="Administração"):
             # Call original logic
             await self.cog.processar_bemvindo(self.ctx, member, interaction)
 
-    class BemVindoView(discord.ui.View):
-        def __init__(self, cog, ctx):
-            super().__init__(timeout=60)
-            self.add_item(AdminCog.BemVindoUserSelect(cog, ctx))
+    # View replaced by PaymentModeView section
+
 
     @commands.hybrid_command(name='bemvindo', description="Cria canal e cadastro para funcionário.")
     @commands.has_permissions(manage_channels=True)

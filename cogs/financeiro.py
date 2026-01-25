@@ -83,14 +83,93 @@ class FinanceiroCog(commands.Cog, name="Financeiro"):
     # PAGAR FUNCIONÁRIO
     # ============================================
 
+    # ============================================
+    # PAGAMENTO CONFIRM VIEW (EXISTENTE)
+    # ============================================
+
+    # ... (PagamentoConfirmView code is assumed to be above or imported, we will reuse logic)
+
+    class PaymentAmountModal(discord.ui.Modal, title="Detalhes do Pagamento"):
+        def __init__(self, cog, ctx, membro: discord.Member, func_db: dict):
+            super().__init__()
+            self.cog = cog
+            self.ctx = ctx
+            self.membro = membro
+            self.func_db = func_db
+
+            self.valor = discord.ui.TextInput(
+                label="Valor (R$)",
+                placeholder="Ex: 500.50",
+                required=True,
+                max_length=10
+            )
+            self.descricao = discord.ui.TextInput(
+                label="Descrição / Motivo",
+                placeholder="Ex: Bônus por meta batida",
+                required=True,
+                style=discord.TextStyle.long
+            )
+            self.add_item(self.valor)
+            self.add_item(self.descricao)
+
+        async def on_submit(self, interaction: discord.Interaction):
+            try:
+                valor_float = float(self.valor.value.replace(',', '.'))
+                if valor_float <= 0: raise ValueError
+            except:
+                await interaction.response.send_message(embed=create_error_embed("Erro", "Valor inválido."), ephemeral=True)
+                return
+            
+            # Show confirmation view (Reuse logic)
+            view = PagamentoConfirmView(self.ctx, self.func_db, self.membro, valor_float, self.descricao.value)
+            embed = create_warning_embed("Confirmar Pagamento?", f"Você está prestes a pagar **R$ {valor_float:.2f}** para {self.membro.mention}.")
+            embed.add_field(name="Motivo", value=self.descricao.value)
+            
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+
+    class PaymentUserSelect(discord.ui.Select):
+        def __init__(self, cog, ctx):
+            super().__init__(placeholder="Selecione o funcionário...", min_values=1, max_values=1, select_type=discord.ComponentType.user_select)
+            self.cog = cog
+            self.ctx = ctx
+
+        async def callback(self, interaction: discord.Interaction):
+            member = self.values[0]
+            if isinstance(member, discord.User):
+                guild = interaction.guild
+                member = guild.get_member(member.id) or member
+            
+            # Validate employee
+            func = await get_funcionario_by_discord_id(str(member.id))
+            if not func:
+                await interaction.response.send_message(embed=create_error_embed("Erro", "Usuário não cadastrado na empresa."), ephemeral=True)
+                return
+
+            await interaction.response.send_modal(FinanceiroCog.PaymentAmountModal(self.cog, self.ctx, member, func))
+
+
+    class PaymentWizardView(discord.ui.View):
+        def __init__(self, cog, ctx):
+            super().__init__(timeout=60)
+            self.add_item(FinanceiroCog.PaymentUserSelect(cog, ctx))
+
+
     @commands.hybrid_command(name='pagar', aliases=['pagamento'], description="Realiza pagamento manual a um funcionário.")
     @commands.has_permissions(manage_messages=True)
     @empresa_configurada()
-    async def pagar_funcionario(self, ctx, membro: discord.Member, valor: float, *, descricao: str = "Pagamento"):
-        """Registra pagamento manual com confirmação."""
+    async def pagar_funcionario(self, ctx, membro: discord.Member = None, valor: float = None, *, descricao: str = "Pagamento"):
+        """Registra pagamento manual (Wizard ou Direto)."""
         empresa = await selecionar_empresa(ctx)
         if not empresa: return
         
+        # Modo Wizard (Sem argumentos)
+        if not membro or valor is None:
+            view = self.PaymentWizardView(self, ctx)
+            await ctx.send(embed=create_info_embed("💰 Assistente de Pagamento", "Selecione o funcionário para iniciar o pagamento."), view=view, ephemeral=True)
+            return
+
+        # Modo Direto (Com argumentos)
         func = await get_funcionario_by_discord_id(str(membro.id))
         if not func:
             await ctx.send(embed=create_error_embed("Erro", f"{membro.display_name} não cadastrado."), ephemeral=True)

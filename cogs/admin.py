@@ -18,6 +18,7 @@ from database import (
     get_or_create_funcionario
 )
 from utils import empresa_configurada, selecionar_empresa
+from ui_utils import create_success_embed, create_error_embed, create_info_embed, handle_interaction_error
 from logging_config import logger
 
 
@@ -61,18 +62,23 @@ class AdminCog(commands.Cog, name="Administração"):
     # CONFIGURAR EMPRESA
     # ============================================
 
-    @commands.command(name='configurar', aliases=['setup'])
+    # ============================================
+    # CONFIGURAR EMPRESA (UI)
+    # ============================================
+
+    @commands.hybrid_command(name='configurar', aliases=['setup'], description="Configura a primeira empresa do servidor.")
     @commands.has_permissions(administrator=True)
     async def configurar_empresa(self, ctx):
-        """Configura a empresa para este servidor."""
+        """Configura a empresa para este servidor (UI)."""
         guild_id = str(ctx.guild.id)
         proprietario_id = str(ctx.author.id)
 
         servidor = await get_or_create_servidor(guild_id, ctx.guild.name, proprietario_id)
         if not servidor:
-            await ctx.send("❌ Erro ao registrar servidor.")
+            await ctx.send(embed=create_error_embed("Erro", "Erro ao registrar servidor."), ephemeral=True)
             return
 
+        # Create Frontend User
         await criar_usuario_frontend(
             discord_id=proprietario_id,
             guild_id=guild_id,
@@ -82,94 +88,19 @@ class AdminCog(commands.Cog, name="Administração"):
 
         empresa = await get_empresa_by_guild(guild_id)
         if empresa:
-            await ctx.send(f"✅ Já existe uma empresa configurada: **{empresa['nome']}** ({empresa['tipos_empresa']['nome']})\n\n💡 Use `!novaempresa` para adicionar mais empresas ao servidor.")
+            await ctx.send(embed=create_info_embed("Já Configurado", f"Empresa já existe: **{empresa['nome']}**\nUse `/novaempresa` para adicionar mais."), ephemeral=True)
             return
 
         tipos = await get_tipos_empresa()
+        if not tipos:
+            await ctx.send(embed=create_error_embed("Erro", "Sem tipos de empresa configurados."), ephemeral=True)
+            return
 
-        embed = discord.Embed(
-            title="🏢 Configuração de Empresa",
-            description="Escolha o tipo de empresa digitando o **número**:",
-            color=discord.Color.blue()
-        )
-
-        tipos_text = ""
-        for i, tipo in enumerate(tipos, 1):
-            tipos_text += f"`{i}.` {tipo['icone']} **{tipo['nome']}**\n"
-
-        embed.add_field(name="Tipos Disponíveis", value=tipos_text, inline=False)
-        embed.set_footer(text="Digite o número ou 'cancelar'")
-
-        await ctx.send(embed=embed)
-
-        def check(m):
-            return m.author == ctx.author and m.channel == ctx.channel
-
-        try:
-            msg = await self.bot.wait_for('message', timeout=60.0, check=check)
-
-            if msg.content.lower() == 'cancelar':
-                await ctx.send("❌ Configuração cancelada.")
-                return
-
-            try:
-                escolha = int(msg.content) - 1
-                if escolha < 0 or escolha >= len(tipos):
-                    await ctx.send("❌ Número inválido.")
-                    return
-            except ValueError:
-                await ctx.send("❌ Digite apenas o número.")
-                return
-
-            tipo_escolhido = tipos[escolha]
-
-            await ctx.send(f"✅ Tipo selecionado: **{tipo_escolhido['nome']}**\n\nAgora digite o **nome da sua empresa**:")
-
-            msg = await self.bot.wait_for('message', timeout=60.0, check=check)
-            nome_empresa = msg.content.strip()
-
-            if len(nome_empresa) < 3:
-                await ctx.send("❌ Nome muito curto.")
-                return
-
-            try:
-                empresa = await criar_empresa(
-                    guild_id,
-                    nome_empresa,
-                    tipo_escolhido['id'],
-                    proprietario_id,
-                    servidor_id=servidor['id']
-                )
-            except Exception as e:
-                await ctx.send(f"❌ Erro ao criar empresa: {e}")
-                return
-
-            if guild_id in empresas_cache:
-                del empresas_cache[guild_id]
-            empresa = await get_empresa_by_guild(guild_id)
-
-            embed = discord.Embed(
-                title="✅ Empresa Criada!",
-                description=f"**{nome_empresa}**",
-                color=discord.Color.green()
-            )
-            embed.add_field(name="Tipo", value=f"{tipo_escolhido['icone']} {tipo_escolhido['nome']}")
-            embed.add_field(name="Proprietário", value=ctx.author.mention)
-            embed.add_field(
-                name="🌐 Acesso Frontend",
-                value=f"Você foi registrado como **Admin** do frontend.\nUse Discord OAuth para fazer login no painel.",
-                inline=False
-            )
-            embed.add_field(
-                name="Próximo Passo",
-                value="Use `!configurarprecos` para definir os preços dos produtos.",
-                inline=False
-            )
-
-            await ctx.send(embed=embed)
-
-        except asyncio.TimeoutError:
-            await ctx.send("❌ Tempo esgotado.")
+        # Reuse NovaEmpresaView logic but for initial setup
+        view = self.NovaEmpresaView(tipos, guild_id, servidor['id'], proprietario_id)
+        embed = create_info_embed("🏢 Configuração Inicial", "Selecione o tipo da sua primeira empresa.")
+        
+        await ctx.send(embed=embed, view=view)
 
     # ============================================
     # LISTAR EMPRESAS
@@ -276,92 +207,105 @@ class AdminCog(commands.Cog, name="Administração"):
         await ctx.send(embed=embed)
 
     # ============================================
-    # NOVA EMPRESA
+    # NOVA EMPRESA (UI MODAL)
     # ============================================
 
-    @commands.command(name='novaempresa')
+    class NovaEmpresaModal(discord.ui.Modal, title="Criar Nova Empresa"):
+        def __init__(self, tipo_id: int, tipo_nome: str, guild_id: str, servidor_id: int, proprietario_id: str):
+            super().__init__()
+            self.tipo_id = tipo_id
+            self.tipo_nome = tipo_nome
+            self.guild_id = guild_id
+            self.servidor_id = servidor_id
+            self.proprietario_id = proprietario_id
+
+            self.nome = discord.ui.TextInput(
+                label="Nome da Empresa",
+                placeholder=f"Ex: {tipo_nome} do {proprietario_id}",
+                min_length=3,
+                max_length=50,
+                required=True
+            )
+            self.add_item(self.nome)
+
+        async def on_submit(self, interaction: discord.Interaction):
+            nome_empresa = self.nome.value.strip()
+            
+            try:
+                empresa = await criar_empresa(
+                    self.guild_id,
+                    nome_empresa,
+                    self.tipo_id,
+                    self.proprietario_id,
+                    servidor_id=self.servidor_id
+                )
+
+                if not empresa:
+                    await interaction.response.send_message(embed=create_error_embed("Erro", "Erro ao criar empresa no banco."), ephemeral=True)
+                    return
+
+                embed = create_success_embed("Nova Empresa Adicionada!")
+                embed.add_field(name="Nome", value=f"**{nome_empresa}**", inline=False)
+                embed.add_field(name="Tipo", value=self.tipo_nome, inline=True)
+                embed.add_field(name="ID", value=f"`{empresa['id']}`", inline=True)
+                
+                await interaction.response.send_message(embed=embed, ephemeral=False) # Public confirm
+            except Exception as e:
+                await handle_interaction_error(interaction, e)
+
+    class NovaEmpresaSelect(discord.ui.Select):
+        def __init__(self, tipos: list, guild_id: str, servidor_id: int, proprietario_id: str):
+            options = []
+            for t in tipos[:25]: # Limit 25
+                label = f"{t['nome']}"
+                if t.get('icone'): label = f"{t['icone']} {label}"
+                options.append(discord.SelectOption(label=label, value=str(t['id']), description=f"Tipo: {t['nome']}"))
+
+            super().__init__(placeholder="Selecione o tipo de empresa...", min_values=1, max_values=1, options=options)
+            self.tipos = {str(t['id']): t for t in tipos}
+            self.guild_id = guild_id
+            self.servidor_id = servidor_id
+            self.proprietario_id = proprietario_id
+
+        async def callback(self, interaction: discord.Interaction):
+            tipo_id = int(self.values[0])
+            tipo = self.tipos[str(tipo_id)]
+            
+            modal = AdminCog.NovaEmpresaModal(
+                tipo_id=tipo_id,
+                tipo_nome=tipo['nome'],
+                guild_id=self.guild_id,
+                servidor_id=self.servidor_id,
+                proprietario_id=self.proprietario_id
+            )
+            await interaction.response.send_modal(modal)
+
+    class NovaEmpresaView(discord.ui.View):
+        def __init__(self, tipos: list, guild_id: str, servidor_id: int, proprietario_id: str):
+            super().__init__(timeout=180)
+            self.add_item(AdminCog.NovaEmpresaSelect(tipos, guild_id, servidor_id, proprietario_id))
+
+    @commands.hybrid_command(name='novaempresa', description="Cria uma nova empresa no servidor.")
     @commands.has_permissions(administrator=True)
     async def nova_empresa(self, ctx):
-        """Adiciona uma nova empresa ao servidor (multi-empresa)."""
+        """Adiciona uma nova empresa ao servidor (UI Interativa)."""
         guild_id = str(ctx.guild.id)
         proprietario_id = str(ctx.author.id)
 
         servidor = await get_servidor_by_guild(guild_id)
         if not servidor:
-            await ctx.send("❌ Use `!configurar` primeiro para configurar o servidor.")
+            await ctx.send(embed=create_error_embed("Erro", "Use `!configurar` primeiro."), ephemeral=True)
             return
 
         tipos = await get_tipos_empresa()
+        if not tipos:
+            await ctx.send(embed=create_error_embed("Erro", "Nenhum tipo de empresa configurado no sistema."), ephemeral=True)
+            return
 
-        embed = discord.Embed(
-            title="🏢 Nova Empresa",
-            description="Escolha o tipo de empresa digitando o **número**:",
-            color=discord.Color.blue()
-        )
-
-        tipos_text = ""
-        for i, tipo in enumerate(tipos, 1):
-            tipos_text += f"`{i}.` {tipo['icone']} **{tipo['nome']}**\n"
-
-        embed.add_field(name="Tipos Disponíveis", value=tipos_text, inline=False)
-        embed.set_footer(text="Digite o número ou 'cancelar'")
-
-        await ctx.send(embed=embed)
-
-        def check(m):
-            return m.author == ctx.author and m.channel == ctx.channel
-
-        try:
-            msg = await self.bot.wait_for('message', timeout=60.0, check=check)
-
-            if msg.content.lower() == 'cancelar':
-                await ctx.send("❌ Cancelado.")
-                return
-
-            try:
-                escolha = int(msg.content) - 1
-                if escolha < 0 or escolha >= len(tipos):
-                    await ctx.send("❌ Número inválido.")
-                    return
-            except ValueError:
-                await ctx.send("❌ Digite apenas o número.")
-                return
-
-            tipo_escolhido = tipos[escolha]
-
-            await ctx.send(f"✅ Tipo: **{tipo_escolhido['nome']}**\n\nDigite o **nome da empresa**:")
-
-            msg = await self.bot.wait_for('message', timeout=60.0, check=check)
-            nome_empresa = msg.content.strip()
-
-            if len(nome_empresa) < 3:
-                await ctx.send("❌ Nome muito curto.")
-                return
-
-            empresa = await criar_empresa(
-                guild_id,
-                nome_empresa,
-                tipo_escolhido['id'],
-                proprietario_id,
-                servidor_id=servidor['id']
-            )
-
-            if not empresa:
-                await ctx.send("❌ Erro ao criar empresa.")
-                return
-
-            embed = discord.Embed(
-                title="✅ Nova Empresa Adicionada!",
-                description=f"**{nome_empresa}**",
-                color=discord.Color.green()
-            )
-            embed.add_field(name="Tipo", value=f"{tipo_escolhido['icone']} {tipo_escolhido['nome']}")
-            embed.add_field(name="ID", value=f"`{empresa['id']}`")
-
-            await ctx.send(embed=embed)
-
-        except asyncio.TimeoutError:
-            await ctx.send("❌ Tempo esgotado.")
+        view = self.NovaEmpresaView(tipos, guild_id, servidor['id'], proprietario_id)
+        embed = create_info_embed("🏢 Nova Empresa", "Selecione o tipo de empresa abaixo para continuar.")
+        
+        await ctx.send(embed=embed, view=view)
 
     # ============================================
     # GESTÃO DE USUÁRIOS
@@ -455,11 +399,46 @@ class AdminCog(commands.Cog, name="Administração"):
             logger.error(f"Erro ao promover: {e}")
             await ctx.send("❌ Erro ao promover usuário.")
 
-    @commands.command(name='bemvindo')
+    # ============================================
+    # BEM-VINDO (UI USER SELECT)
+    # ============================================
+
+    class BemVindoUserSelect(discord.ui.Select):
+        def __init__(self, cog, ctx):
+            super().__init__(placeholder="Selecione o funcionário...", min_values=1, max_values=1, select_type=discord.ComponentType.user_select)
+            self.cog = cog
+            self.ctx = ctx
+
+        async def callback(self, interaction: discord.Interaction):
+            # Get member object
+            member = self.values[0]
+            if isinstance(member, discord.User): # Fallback if cache miss
+                guild = interaction.guild
+                member = guild.get_member(member.id) or member
+            
+            await interaction.response.defer()
+            # Call original logic
+            await self.cog.processar_bemvindo(self.ctx, member, interaction)
+
+    class BemVindoView(discord.ui.View):
+        def __init__(self, cog, ctx):
+            super().__init__(timeout=60)
+            self.add_item(AdminCog.BemVindoUserSelect(cog, ctx))
+
+    @commands.hybrid_command(name='bemvindo', description="Cria canal e cadastro para funcionário.")
     @commands.has_permissions(manage_channels=True)
     @empresa_configurada()
-    async def bemvindo(self, ctx, membro: discord.Member):
-        """Cria canal privado para funcionário e dá acesso ao frontend."""
+    async def bemvindo(self, ctx, membro: discord.Member = None):
+        """Cria canal privado e cadastro (UI ou Argumento)."""
+        if not membro:
+            view = self.BemVindoView(self, ctx)
+            await ctx.send(embed=create_info_embed("👋 Cadastro de Funcionário", "Selecione o usuário abaixo."), view=view, ephemeral=True)
+            return
+        
+        await self.processar_bemvindo(ctx, membro)
+
+    async def processar_bemvindo(self, ctx, membro: discord.Member, interaction: discord.Interaction = None):
+        """Lógica central do bem-vindo (separada para reuso)."""
         empresa = await selecionar_empresa(ctx)
         if not empresa: return
         
@@ -475,7 +454,9 @@ class AdminCog(commands.Cog, name="Administração"):
         except: pass
 
         prefixo = "admin" if eh_admin else "func"
-        nome_canal = f"{prefixo}-{membro.display_name.lower().replace(' ', '-')}"
+        # Normalize name for channel
+        clean_name = "".join(c for c in membro.display_name if c.isalnum() or c in [' ', '-', '_']).lower().replace(' ', '-')
+        nome_canal = f"{prefixo}-{clean_name}"
 
         # Lógica de Categorias
         nome_categoria = "👔 ADMINISTRAÇÃO" if eh_admin else "🏭 PRODUÇÃO"
@@ -485,7 +466,10 @@ class AdminCog(commands.Cog, name="Administração"):
             try:
                 categoria = await guild.create_category(nome_categoria)
             except Exception as e:
-                await ctx.send(f"⚠️ Não consegui criar a categoria '{nome_categoria}': {e}")
+                # Use interaction if available for reply
+                msg = f"⚠️ Não consegui criar a categoria '{nome_categoria}': {e}"
+                if interaction: await interaction.followup.send(msg)
+                else: await ctx.send(msg)
 
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
@@ -493,18 +477,24 @@ class AdminCog(commands.Cog, name="Administração"):
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
 
+        created_channel = None
         try:
              # Tenta encontrar canal existente ou criar novo dentro da categoria
              existing_channel = discord.utils.get(guild.text_channels, name=nome_canal)
              if existing_channel:
-                 canal = existing_channel
-                 if categoria and canal.category != categoria:
-                     await canal.edit(category=categoria)
-                 await ctx.send(f"⚠️ O canal {canal.mention} já existia e foi configurado.")
+                 created_channel = existing_channel
+                 if categoria and created_channel.category != categoria:
+                     await created_channel.edit(category=categoria)
+                 
+                 msg = f"⚠️ O canal {created_channel.mention} já existia e foi configurado."
+                 if interaction: await interaction.followup.send(msg)
+                 else: await ctx.send(msg)
              else:
-                 canal = await guild.create_text_channel(name=nome_canal, overwrites=overwrites, category=categoria)
+                 created_channel = await guild.create_text_channel(name=nome_canal, overwrites=overwrites, category=categoria)
         except Exception as e:
-             await ctx.send(f"❌ Erro ao criar canal: {e}")
+             msg = f"❌ Erro ao criar canal: {e}"
+             if interaction: await interaction.followup.send(msg)
+             else: await ctx.send(msg)
              return
 
         func_id = await get_or_create_funcionario(str(membro.id), membro.display_name, empresa['id'])
@@ -537,8 +527,11 @@ class AdminCog(commands.Cog, name="Administração"):
             inline=False
         )
 
-        await canal.send(embed=embed)
-        await ctx.send(f"✅ Canal {canal.mention} configurado na categoria **{nome_categoria}**!")
+        await created_channel.send(embed=embed)
+        
+        success_msg = f"✅ Canal {created_channel.mention} configurado na categoria **{nome_categoria}**!"
+        if interaction: await interaction.followup.send(success_msg)
+        else: await ctx.send(success_msg)
 
     # ============================================
     # LIMPAR MENSAGENS

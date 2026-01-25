@@ -167,7 +167,7 @@ async def ajuda(ctx):
 
     embed = discord.Embed(
         title="🏢 Bot Multi-Empresa Downtown",
-        description=f"**Empresa(s):** {nome_empresa}\nVersão: 2.5 (Produção & Encomendas)",
+        description=f"**Empresa(s):** {nome_empresa}\nVersão: 3.0 (UI Moderna)",
         color=discord.Color.blue()
     )
 
@@ -184,10 +184,10 @@ async def ajuda(ctx):
     # 2. PRODUÇÃO
     embed.add_field(
         name="🏭 Produção & Encomendas",
-        value="`!add [produto] [qtd]` - Adicionar ao estoque (Fabricar)\n"
+        value="`/produzir` - **Novo!** Menu interativo de Fabricação\n"
               "`!estoque` - Ver seu estoque e saldo\n"
               "`!produtos` - Ver catálogo de códigos e produtos\n"
-              "`!novaencomenda` - Criar nova encomenda (Menu ou Rápido)\n"
+              "`/encomenda` - **Novo!** Criar encomenda (Menu)\n"
               "`!encomendas` - Ver encomendas pendentes\n"
               "`!entregar [ID]` - Entregar encomenda para cliente\n"
               "`!deletar [codigo]` - Jogar fora/remover do estoque\n"
@@ -197,27 +197,24 @@ async def ajuda(ctx):
 
     # 3. ADMINISTRAÇÃO
     embed.add_field(
-        name="🛡️ Administração (Requer permissão)",
-        value="`!configurar` - Configuração inicial da empresa\n"
-              "`!novaempresa` - Adicionar outra empresa no servidor\n"
-              "`!modopagamento` - Definir Produção (Acumulativo) ou Entrega (Comissão)\n"
-              "`!configmin` / `!configmedio` / `!configmax` - Configurar preços auto\n"
+        name="🛡️ Administração",
+        value="`/novaempresa` - **Novo!** Menu para criar empresa\n"
+              "`!configurar` - Configuração inicial da empresa\n"
+              "`!modopagamento` - Definir Produção ou Entrega\n"
               "`!configurarprecos` - Configurar preços manualmente\n"
-              "`!comissao [%]` - Definir porcentagem de comissão (ex: 30%)\n"
+              "`!comissao [%]` - Definir comissão\n"
               "`!usuarios` - Listar equipe cadastrada\n"
               "`!bemvindo @pessoa` - Criar cadastro e canal privado\n"
-              "`!promover @pessoa` - Promover funcionário a Admin\n"
-              "`!removeracesso @pessoa` - Remover acesso ao painel\n"
-              "`!limpar [qtd]` - Limpar mensagens do chat",
+              "`!promover @pessoa` - Promover funcionário a Admin",
         inline=False
     )
 
     # 4. FINANCEIRO
     embed.add_field(
         name="💰 Financeiro (Admin)",
-        value="`!caixa` - Relatório financeiro geral (Saldos + Estoques)\n"
-              "`!pagar @pessoa [valor]` - Pagamento avulso/bônus\n"
-              "`!pagarestoque @pessoa` - Pagar comissão acumulada e zerar estoque",
+        value="`!caixa` - Relatório financeiro geral\n"
+              "`/pagar` - **Novo!** Pagamento seguro com confirmação\n"
+              "`!pagarestoque @pessoa` - Pagar acumulado e zerar estoque",
         inline=False
     )
 

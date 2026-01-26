@@ -94,7 +94,19 @@ class AdminCog(commands.Cog, name="Administração"):
             return
 
         # 0. Check if we need to select base
-        # Logic: Show Base Select first.
+        # If base is already set (e.g. via manual DB entry or previous setup), skip selection
+        if servidor.get('base_redm_id'):
+            base_id = servidor['base_redm_id']
+            tipos = await get_tipos_empresa(guild_id)
+            if not tipos:
+                await ctx.send(embed=create_error_embed("Erro", "Nenhum tipo de empresa configurado para esta base."))
+                return
+
+            view = self.NovaEmpresaView(tipos, guild_id, servidor['id'], proprietario_id)
+            embed = create_info_embed("🏢 Configuração de Empresa", "Selecione o tipo da sua empresa.")
+            await ctx.send(embed=embed, view=view)
+            return
+
         bases = await get_bases_redm()
         if not bases:
              await ctx.send("❌ Erro critico: Nenhuma base REDM encontrada no sistema.")

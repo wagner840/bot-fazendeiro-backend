@@ -8,8 +8,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Mock database and dependencies
-sys.modules['config'] = MagicMock()
-sys.modules['database'] = MagicMock()
+# sys.modules hacks removed
+# sys.modules['config'] = MagicMock()
+# sys.modules['database'] = MagicMock()
 from config import empresas_cache, servidores_cache
 
 # We need to ensure AdminCog imports verify these mocks or we mock where it imports
@@ -105,17 +106,17 @@ async def test_promover_usuario(cog, mock_ctx, mock_env):
     mock_select.data = [{'id': 55, 'role': 'funcionario'}]
     deps['supabase'].table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_select
     
-    # Fix: Ensure function-level imports are AsyncMock
-    deps['database'] = sys.modules['database']
-    deps['database'].get_usuario_frontend = AsyncMock(return_value={'id': 55, 'role': 'funcionario'})
-    deps['database'].atualizar_role_usuario_frontend = AsyncMock(return_value=True)
+    # Patch database functions
+    with patch('database.get_usuario_frontend', new_callable=AsyncMock) as mock_get_u, \
+         patch('database.atualizar_role_usuario_frontend', new_callable=AsyncMock) as mock_upd:
+         
+        mock_get_u.return_value = {'id': 55, 'role': 'funcionario'}
+        mock_upd.return_value = True
 
-    await cog.promover_admin.callback(cog, mock_ctx, membro=member)
-    
-    # verify update call
-    # table().update({'role': 'admin' ...})
-    call_args = deps['supabase'].table.return_value.update.call_args
-    assert call_args[0][0]['role'] == 'admin'
+        await cog.promover_admin.callback(cog, mock_ctx, membro=member)
+        
+        # Verify call to the mock
+        mock_upd.assert_called_with(55, 'admin')
 
 @pytest.mark.asyncio
 async def test_modo_pagamento_interactive(cog, mock_ctx, mock_env, mock_bot):

@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS tipos_empresa (
     descricao TEXT,
     cor_hex TEXT DEFAULT '#10b981',
     icone TEXT DEFAULT '🏢',
-    ativo BOOLEAN DEFAULT TRUE
+    ativo BOOLEAN DEFAULT TRUE,
+    base_redm_id INTEGER REFERENCES bases_redm(id)
 );
 
 -- Tabela de empresas (uma por servidor Discord)
@@ -19,10 +20,8 @@ CREATE TABLE IF NOT EXISTS empresas (
     id SERIAL PRIMARY KEY,
     guild_id TEXT UNIQUE NOT NULL,
     nome TEXT NOT NULL,
-    tipo_empresa_id INTEGER NOT NULL REFERENCES tipos_empresa(id),
-    proprietario_discord_id TEXT,
-    data_criacao TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    ativo BOOLEAN DEFAULT TRUE
+    ativo BOOLEAN DEFAULT TRUE,
+    FOREIGN KEY (tipo_empresa_id) REFERENCES tipos_empresa(id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_empresas_guild ON empresas(guild_id);
@@ -111,6 +110,95 @@ CREATE TABLE IF NOT EXISTS historico_pagamentos (
 );
 
 CREATE INDEX IF NOT EXISTS idx_pagamentos_funcionario ON historico_pagamentos(funcionario_id);
+
+-- ============================================
+-- TABELAS INFRAESTRUTURA / SAAS
+-- ============================================
+
+-- Tabela de Bases RedM (Servidores suportados/conectados)
+CREATE TABLE IF NOT EXISTS bases_redm (
+    id SERIAL PRIMARY KEY,
+    nome TEXT NOT NULL UNIQUE,
+    ativo BOOLEAN DEFAULT TRUE
+);
+
+-- Tabela de Planos de Assinatura
+CREATE TABLE IF NOT EXISTS planos (
+    id SERIAL PRIMARY KEY,
+    nome TEXT NOT NULL,
+    descricao TEXT,
+    preco DECIMAL(10,2) NOT NULL,
+    duracao_dias INTEGER DEFAULT 30,
+    ativo BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Tabela de Servidores Discord (Clientes)
+CREATE TABLE IF NOT EXISTS servidores (
+    id SERIAL PRIMARY KEY,
+    guild_id TEXT UNIQUE NOT NULL,
+    nome TEXT NOT NULL,
+    plano_atual TEXT DEFAULT 'gratuito',
+    assinatura_ativa BOOLEAN DEFAULT TRUE,
+    data_criacao TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    ativo BOOLEAN DEFAULT TRUE,
+    base_redm_id INTEGER DEFAULT 1 REFERENCES bases_redm(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_servidores_base_redm ON servidores(base_redm_id);
+
+-- Tabela de Usuários do Dashboard Frontend
+CREATE TABLE IF NOT EXISTS usuarios_frontend (
+    id SERIAL PRIMARY KEY,
+    discord_id TEXT NOT NULL,
+    guild_id TEXT,
+    role TEXT DEFAULT 'funcionario',
+    ativo BOOLEAN DEFAULT TRUE,
+    criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    criado_por TEXT,
+    nome TEXT
+);
+
+-- Tabela de Assinaturas
+CREATE TABLE IF NOT EXISTS assinaturas (
+    id SERIAL PRIMARY KEY,
+    servidor_id INTEGER REFERENCES servidores(id),
+    guild_id TEXT NOT NULL,
+    plano_id INTEGER REFERENCES planos(id),
+    status TEXT DEFAULT 'pendente',
+    data_inicio TIMESTAMP WITH TIME ZONE,
+    data_expiracao TIMESTAMP WITH TIME ZONE,
+    pagador_discord_id TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_assinaturas_servidor ON assinaturas(servidor_id);
+CREATE INDEX IF NOT EXISTS idx_assinaturas_plano ON assinaturas(plano_id);
+
+-- Tabela de Pagamentos PIX
+CREATE TABLE IF NOT EXISTS pagamentos_pix (
+    id SERIAL PRIMARY KEY,
+    transaction_id TEXT UNIQUE NOT NULL,
+    valor DECIMAL(10,2) NOT NULL,
+    status TEXT DEFAULT 'pending',
+    qr_code TEXT,
+    qr_code_base64 TEXT,
+    assinatura_id INTEGER REFERENCES assinaturas(id),
+    plano_id INTEGER REFERENCES planos(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    expiration_date TIMESTAMP WITH TIME ZONE,
+    external_reference TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_pagamentos_pix_assinatura ON pagamentos_pix(assinatura_id);
+CREATE INDEX IF NOT EXISTS idx_pagamentos_pix_plano ON pagamentos_pix(plano_id);
+
+-- Indexes adicionais de performance (identificados no review)
+CREATE INDEX IF NOT EXISTS idx_empresas_tipo_empresa ON empresas(tipo_empresa_id);
+CREATE INDEX IF NOT EXISTS idx_estoque_produtos_empresa ON estoque_produtos(empresa_id);
+CREATE INDEX IF NOT EXISTS idx_tipos_empresa_base_redm ON tipos_empresa(base_redm_id);
 
 -- ============================================
 -- TIPOS DE EMPRESA DOWNTOWN

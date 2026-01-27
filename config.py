@@ -5,6 +5,7 @@ Carrega variáveis de ambiente e inicializa conexões.
 
 import os
 import re
+from cachetools import TTLCache
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
@@ -41,6 +42,13 @@ ASAAS_API_KEY = os.getenv('ASAAS_API_KEY')
 ASAAS_API_URL = os.getenv('ASAAS_API_URL', "https://www.asaas.com/api/v3")
 ASAAS_WEBHOOK_TOKEN = os.getenv('ASAAS_WEBHOOK_TOKEN')
 
-# Caches globais
-empresas_cache = {}
-servidores_cache = {}
+# Configurações do Frontend
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+CHECKOUT_URL = f"{FRONTEND_URL}/checkout"
+
+# Configurações de Superadmin
+SUPERADMIN_IDS = [id.strip() for id in os.getenv('SUPERADMIN_IDS', '').split(',') if id.strip()]
+
+# Caches globais com TTL (5 minutos)
+empresas_cache = TTLCache(maxsize=1000, ttl=300)
+servidores_cache = TTLCache(maxsize=1000, ttl=300)

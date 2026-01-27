@@ -758,18 +758,6 @@ def limpar_cache_servidor(guild_id: str):
         del servidores_cache[guild_id]
 
 
-async def atualizar_modo_pagamento(empresa_id: int, modo: str) -> bool:
-    """Atualiza o modo de pagamento da empresa."""
-    try:
-        supabase.table('empresas').update({
-            'modo_pagamento': modo
-        }).eq('id', empresa_id).execute()
-        return True
-    except Exception as e:
-        logger.error(f"Erro ao atualizar modo de pagamento: {e}")
-        return False
-
-
 # ============================================
 # FUNÇÕES DE ASSINATURA E PAGAMENTO
 # ============================================

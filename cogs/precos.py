@@ -517,14 +517,7 @@ class PrecosCog(commands.Cog, name="Preços"):
             return
 
         if porcentagem:
-            # Direct usage fallback
-            await self.aplicar_comissao(ctx, empresa['id'], produtos, porcentagem) # Context masquerading as interaction for followup support if needed, requires generic send check or separate method.
-            # actually better to just create fake interaction wrapper or duplicate logic slightly?
-            # ideally we deprecate direct usage, but let's keep it simple:
-            # self.aplicar_comissao expects interaction. Let's make it robust.
-            pass # Too complex to retrofit "interaction" on ctx. Let's just run logic.
-            
-            # Legacy Logic for valid arg
+            # Modo direto: aplica comissão imediatamente
             msg = await ctx.send("⏳ Aplicando...")
             for codigo, p in produtos.items():
                 pv = float(p['preco_venda'])

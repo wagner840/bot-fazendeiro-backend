@@ -144,7 +144,7 @@ class PrecosCog(commands.Cog, name="Preços"):
         empresa = await selecionar_empresa(ctx)
         if not empresa: return
 
-        produtos_ref = await get_produtos_referencia(empresa['tipo_empresa_id'])
+        produtos_ref = await get_produtos_referencia(empresa['tipo_empresa_id'], guild_id=str(ctx.guild.id))
         if not produtos_ref:
             await ctx.send("❌ Nenhum produto disponível.")
             return
@@ -197,8 +197,8 @@ class PrecosCog(commands.Cog, name="Preços"):
         if not empresa:
             return
         
-        produtos_ref = await get_produtos_referencia(empresa['tipo_empresa_id'])
-        
+        produtos_ref = await get_produtos_referencia(empresa['tipo_empresa_id'], guild_id=str(ctx.guild.id))
+
         if not produtos_ref:
             await ctx.send("❌ Nenhum produto disponível.")
             return

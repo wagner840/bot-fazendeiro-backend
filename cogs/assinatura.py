@@ -3,7 +3,9 @@ Bot Multi-Empresa Downtown - Cog de Assinatura
 Gerencia verificação de assinatura e pagamentos.
 """
 
+import aiohttp
 import discord
+import os
 from discord.ext import commands
 from discord import app_commands
 
@@ -14,16 +16,12 @@ from database import (
     adicionar_tester,
     remover_tester,
     listar_testers,
-    simular_pagamento
+    simular_pagamento,
+    buscar_pagamento_pendente_usuario,
+    atualizar_pagamento_guild,
+    ativar_assinatura_servidor
 )
-
-
-# URLs do frontend - ajuste conforme seu deploy
-FRONTEND_URL = "http://localhost:3000"
-CHECKOUT_URL = f"{FRONTEND_URL}/checkout"
-
-# IDs de superadmins que podem gerenciar testers (adicione seu Discord ID)
-SUPERADMIN_IDS = ["306217606082199555"]
+from config import FRONTEND_URL, CHECKOUT_URL, SUPERADMIN_IDS, ASAAS_API_KEY, ASAAS_API_URL, supabase
 
 
 def criar_embed_assinatura_expirada():
@@ -259,11 +257,6 @@ class Assinatura(commands.Cog):
     async def validar_pagamento(self, ctx):
         """Valida manualmente um pagamento pendente ou pago, confirmando no Asaas."""
         try:
-            from database import buscar_pagamento_pendente_usuario, atualizar_pagamento_guild, ativar_assinatura_servidor
-            from config import ASAAS_API_KEY
-            import aiohttp
-            import os
-            
             discord_id = str(ctx.author.id)
             guild_id = str(ctx.guild.id)
             
@@ -306,7 +299,6 @@ class Assinatura(commands.Cog):
             # Se 'pendente', consultamos a API do Asaas
             await ctx.send("🌐 Consultando Banco Central/Asaas para confirmação...")
             
-            from config import ASAAS_API_URL
             headers = {"access_token": ASAAS_API_KEY}
             
             if not ASAAS_API_KEY:
@@ -330,7 +322,6 @@ class Assinatura(commands.Cog):
             if status_real in ['RECEIVED', 'CONFIRMED']:
                 await ctx.send("💸 Pagamento confirmado! Finalizando configuração...")
                 
-                from config import supabase
                 supabase.table('pagamentos_pix').update({'status': 'pago'}).eq('pix_id', pix_id).execute()
                 
                 success = await ativar_assinatura_servidor(guild_id, plano_id, discord_id)

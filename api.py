@@ -19,8 +19,7 @@ load_dotenv()
 
 # Configuration
 # Configuration
-from config import ASAAS_API_KEY, ASAAS_API_URL, ASAAS_WEBHOOK_TOKEN, supabase
-FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+from config import ASAAS_API_KEY, ASAAS_API_URL, ASAAS_WEBHOOK_TOKEN, supabase, FRONTEND_URL
 
 if ASAAS_API_KEY:
     logger.info(f"ASAAS_API_KEY loaded. Length: {len(ASAAS_API_KEY)}")

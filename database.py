@@ -464,34 +464,40 @@ async def atualizar_canal_funcionario(funcionario_id: int, channel_id: str) -> b
 # ============================================
 
 async def adicionar_ao_estoque(funcionario_id: int, empresa_id: int, codigo: str, quantidade: int) -> Optional[Dict]:
-    """Adiciona produtos ao estoque do funcionário."""
+    """Adiciona produtos ao estoque do funcionário usando upsert atômico."""
     try:
         produtos = await get_produtos_empresa(empresa_id)
         if codigo.lower() not in produtos:
             return None
-        
+
         produto = produtos[codigo.lower()]
         codigo_limpo = codigo.lower()
 
-        # 1. Tenta buscar o item existente
-        response = supabase.table('estoque_produtos').select('*').eq(
-            'funcionario_id', funcionario_id
-        ).eq('produto_codigo', codigo_limpo).eq('empresa_id', empresa_id).execute()
+        # Use atomic RPC upsert to avoid race conditions
+        try:
+            response = supabase.rpc('upsert_estoque', {
+                'p_funcionario_id': funcionario_id,
+                'p_empresa_id': empresa_id,
+                'p_produto_codigo': codigo_limpo,
+                'p_quantidade': quantidade
+            }).execute()
+            final_qtd = response.data if response.data is not None else quantidade
+        except Exception:
+            # Fallback to manual upsert if RPC not available
+            logger.warning("RPC upsert_estoque not available, using fallback.")
+            resp = supabase.table('estoque_produtos').select('*').eq(
+                'funcionario_id', funcionario_id
+            ).eq('produto_codigo', codigo_limpo).eq('empresa_id', empresa_id).execute()
 
-        if response.data:
-            # 2. Se existe, atualiza (incrementa)
-            item_id = response.data[0]['id']
-            nova_qtd = response.data[0]['quantidade'] + quantidade
-            
-            res_upd = supabase.table('estoque_produtos').update({
-                'quantidade': nova_qtd,
-                'data_atualizacao': datetime.utcnow().isoformat()
-            }).eq('id', item_id).execute()
-            
-            final_qtd = res_upd.data[0]['quantidade'] if res_upd.data else nova_qtd
-        else:
-            # 3. Se não existe, tenta inserir
-            try:
+            if resp.data:
+                item_id = resp.data[0]['id']
+                nova_qtd = resp.data[0]['quantidade'] + quantidade
+                supabase.table('estoque_produtos').update({
+                    'quantidade': nova_qtd,
+                    'data_atualizacao': datetime.utcnow().isoformat()
+                }).eq('id', item_id).execute()
+                final_qtd = nova_qtd
+            else:
                 res_ins = supabase.table('estoque_produtos').insert({
                     'funcionario_id': funcionario_id,
                     'empresa_id': empresa_id,
@@ -499,26 +505,6 @@ async def adicionar_ao_estoque(funcionario_id: int, empresa_id: int, codigo: str
                     'quantidade': quantidade
                 }).execute()
                 final_qtd = res_ins.data[0]['quantidade'] if res_ins.data else quantidade
-            except Exception as e:
-                # 4. Fallback para o caso de inserção simultânea (Race Condition)
-                # O erro 23505 é Unique Violation no Postgres
-                logger.warning(f"Race condition detected in adicionar_ao_estoque for func={funcionario_id} prod={codigo_limpo}. Retrying update.")
-                
-                # Busca novamente
-                retry = supabase.table('estoque_produtos').select('*').eq(
-                    'funcionario_id', funcionario_id
-                ).eq('produto_codigo', codigo_limpo).eq('empresa_id', empresa_id).execute()
-                
-                if retry.data:
-                    item_id = retry.data[0]['id']
-                    final_qtd = retry.data[0]['quantidade'] + quantidade
-                    supabase.table('estoque_produtos').update({
-                        'quantidade': final_qtd,
-                        'data_atualizacao': datetime.utcnow().isoformat()
-                    }).eq('id', item_id).execute()
-                else:
-                    # Se mesmo assim não achar, algo muito estranho aconteceu
-                    raise e
 
         return {'quantidade': final_qtd, 'nome': produto['produtos_referencia']['nome']}
     except Exception as e:
@@ -666,20 +652,27 @@ async def get_transacoes_empresa(empresa_id: int, limit: int = 50) -> List[Dict]
 
 
 async def get_saldo_empresa(empresa_id: int) -> float:
-    """Calcula o saldo atual da empresa."""
+    """Calcula o saldo atual da empresa usando RPC otimizado."""
     try:
-        response = supabase.table('transacoes').select('tipo, valor').eq('empresa_id', empresa_id).execute()
-        
-        saldo = 0.0
-        for t in response.data or []:
-            if t['tipo'] == 'entrada':
-                saldo += float(t['valor'])
-            else:
-                saldo -= float(t['valor'])
-        return saldo
-    except Exception as e:
-        logger.error(f"Erro ao calcular saldo: {e}")
+        response = supabase.rpc('calcular_saldo_empresa', {'p_empresa_id': empresa_id}).execute()
+        if response.data is not None:
+            return float(response.data)
         return 0.0
+    except Exception as e:
+        logger.warning(f"RPC calcular_saldo_empresa falhou, usando fallback: {e}")
+        # Fallback to manual calculation
+        try:
+            response = supabase.table('transacoes').select('tipo, valor').eq('empresa_id', empresa_id).execute()
+            saldo = 0.0
+            for t in response.data or []:
+                if t['tipo'] == 'entrada':
+                    saldo += float(t['valor'])
+                else:
+                    saldo -= float(t['valor'])
+            return saldo
+        except Exception as e2:
+            logger.error(f"Erro ao calcular saldo (fallback): {e2}")
+            return 0.0
 
 
 # ============================================

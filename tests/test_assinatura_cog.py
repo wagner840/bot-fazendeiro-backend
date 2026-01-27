@@ -8,9 +8,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Mock database and dependencies
-sys.modules['config'] = MagicMock()
-sys.modules['database'] = MagicMock()
-sys.modules['aiohttp'] = MagicMock()
+# sys.modules hacks removed
+# sys.modules['config'] = MagicMock()
+# sys.modules['database'] = MagicMock()
+# sys.modules['aiohttp'] = MagicMock()
 
 from cogs.assinatura import Assinatura
 

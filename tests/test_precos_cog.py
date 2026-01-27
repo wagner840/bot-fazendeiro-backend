@@ -8,15 +8,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Mock database and utils
-sys.modules['config'] = MagicMock()
+# sys.modules hacks removed
+# sys.modules['config'] = MagicMock()
+# sys.modules['utils'] = MagicMock()
+# sys.modules['database'] = MagicMock()
 mock_utils = MagicMock()
 def pass_through_decorator(*args, **kwargs):
     def decorator(func):
         return func
     return decorator
 mock_utils.empresa_configurada = pass_through_decorator
-sys.modules['utils'] = mock_utils
-sys.modules['database'] = MagicMock()
 
 from cogs.precos import PrecosCog
 

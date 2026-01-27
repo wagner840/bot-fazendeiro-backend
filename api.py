@@ -1,6 +1,8 @@
 import os
 import aiohttp
 from fastapi import FastAPI, HTTPException, Request, Header
+from fastapi.responses import Response
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
 from typing import Optional
 from dotenv import load_dotenv
@@ -41,9 +43,21 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "asaas-access-token"],
 )
+
+# Security Headers Middleware
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 # supabase client is already imported from config and initialized there
 
@@ -66,7 +80,7 @@ async def root():
 @app.post("/api/pix/create")
 async def create_pix_charge(req: PixChargeRequest):
     """Creates a customer and a PIX charge in Asaas."""
-    logger.info(f"Received PIX charge request: {req.dict()}")
+    logger.info(f"Received PIX charge request: guild={req.guild_id}, plano={req.plano_id}, pagador={req.pagador_discord_id}")
 
     if not ASAAS_API_KEY:
         logger.error("Asaas API Key missing during charge creation.")
@@ -218,12 +232,12 @@ async def handle_webhook(request: Request, asaas_access_token: Optional[str] = H
         raise HTTPException(status_code=500, detail="Server misconfiguration: Webhook Token missing")
 
     if asaas_access_token != ASAAS_WEBHOOK_TOKEN:
-        logger.warning(f"Unauthorized Webhook attempt. Token: {asaas_access_token}")
+        logger.warning(f"Unauthorized Webhook attempt from {request.client.host}")
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     try:
         data = await request.json()
-        logger.info(f"Webhook received: {data}")
+        logger.info(f"Webhook received: event={data.get('event')}, payment_id={data.get('payment', {}).get('id')}")
         
         event = data.get('event')
         payment = data.get('payment')
@@ -293,44 +307,51 @@ async def verify_payment_endpoint(payment_id: str):
 async def process_payment_confirmation(payment_id: str):
     """Core logic to activate subscription from a confirmed payment."""
     logger.info(f"Processing confirmation for: {payment_id}")
-    
+
+    # Idempotency check: only process if not already paid
+    pay_record = supabase.table('pagamentos_pix').select('*').eq('pix_id', payment_id).single().execute()
+
+    if not pay_record.data:
+        logger.warning(f"Payment {payment_id} not found in database.")
+        return
+
+    if pay_record.data.get('status') == 'pago':
+        logger.info(f"Payment {payment_id} already processed. Skipping.")
+        return
+
     # Update Payment Status
     supabase.table('pagamentos_pix').update({'status': 'pago'}).eq('pix_id', payment_id).execute()
-    
-    # Get payment details
-    pay_record = supabase.table('pagamentos_pix').select('*').eq('pix_id', payment_id).single().execute()
-    
-    if pay_record.data:
-        guild_id = pay_record.data['guild_id']
-        plano_id = pay_record.data['plano_id']
-        
-        # Guard clause for pending activation
-        if guild_id == 'pending_activation':
-            logger.warning(f"Payment {payment_id} is paid but has no guild linked yet.")
-            return
 
-        # Fetch plan duration
-        plano = supabase.table('planos').select('*').eq('id', plano_id).single().execute()
-        days = plano.data['duracao_dias']
-        
-        # Calculate expiration (Idempotency check could go here)
-        expiration = (datetime.datetime.now() + datetime.timedelta(days=days)).isoformat()
-        
-        # Update/Create Subscription
-        existing = supabase.table('assinaturas').select('*').eq('guild_id', guild_id).execute()
-        
-        subscription_data = {
-            'plano_id': plano_id,
-            'data_inicio': datetime.datetime.now().isoformat(),
-            'data_expiracao': expiration,
-            'status': 'ativa',
-            'pagamento_status': 'pago'
-        }
+    guild_id = pay_record.data['guild_id']
+    plano_id = pay_record.data['plano_id']
 
-        if existing.data:
-            supabase.table('assinaturas').update(subscription_data).eq('guild_id', guild_id).execute()
-            logger.info(f"Subscription updated for guild {guild_id}")
-        else:
-            subscription_data['guild_id'] = guild_id
-            supabase.table('assinaturas').insert(subscription_data).execute()
-            logger.info(f"Subscription created for guild {guild_id}")
+    # Guard clause for pending activation
+    if guild_id == 'pending_activation':
+        logger.warning(f"Payment {payment_id} is paid but has no guild linked yet.")
+        return
+
+    # Fetch plan duration
+    plano = supabase.table('planos').select('*').eq('id', plano_id).single().execute()
+    days = plano.data['duracao_dias']
+
+    # Calculate expiration
+    expiration = (datetime.datetime.now() + datetime.timedelta(days=days)).isoformat()
+
+    # Update/Create Subscription
+    existing = supabase.table('assinaturas').select('*').eq('guild_id', guild_id).execute()
+
+    subscription_data = {
+        'plano_id': plano_id,
+        'data_inicio': datetime.datetime.now().isoformat(),
+        'data_expiracao': expiration,
+        'status': 'ativa',
+        'pagamento_status': 'pago'
+    }
+
+    if existing.data:
+        supabase.table('assinaturas').update(subscription_data).eq('guild_id', guild_id).execute()
+        logger.info(f"Subscription updated for guild {guild_id}")
+    else:
+        subscription_data['guild_id'] = guild_id
+        supabase.table('assinaturas').insert(subscription_data).execute()
+        logger.info(f"Subscription created for guild {guild_id}")

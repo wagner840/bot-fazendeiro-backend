@@ -121,13 +121,21 @@ class DeleteConfirmModal(discord.ui.Modal, title="Confirmar Exclusão"):
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
-            qtd_str = self.qtd.value.lower()
+            qtd_str = self.qtd.value.lower().strip()
+            
             if qtd_str == 'tudo':
-                await interaction.response.send_message("Por favor, digite a quantidade numérica específica.", ephemeral=True)
-                return
-
-            quantidade = int(qtd_str)
-            if quantidade <= 0: raise ValueError
+                # Busca quantidade atual para remover tudo
+                from database import get_estoque_funcionario
+                estoque = await get_estoque_funcionario(self.func_id, self.empresa_id)
+                item = next((e for e in estoque if e['produto_codigo'] == self.codigo), None)
+                if not item:
+                    await interaction.response.send_message("❌ Item não encontrado no estoque.", ephemeral=True)
+                    return
+                quantidade = item['quantidade']
+            else:
+                quantidade = int(qtd_str)
+                if quantidade <= 0: 
+                    raise ValueError
             
             res = await remover_do_estoque(self.func_id, self.empresa_id, self.codigo, quantidade)
             if res and 'removido' in res:

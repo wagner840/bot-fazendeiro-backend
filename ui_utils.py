@@ -68,6 +68,16 @@ async def handle_interaction_error(interaction: discord.Interaction, error: Exce
         pass
 
 # ============================================
+# ALIASES EM PORTUGUÊS (para padronização)
+# ============================================
+
+criar_embed = create_embed
+criar_embed_sucesso = create_success_embed
+criar_embed_erro = create_error_embed
+criar_embed_aviso = create_warning_embed
+criar_embed_info = create_info_embed
+
+# ============================================
 # BASE UI COMPONENTS
 # ============================================
 

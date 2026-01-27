@@ -106,10 +106,6 @@ COMANDOS_LIVRES = {
     'validarpagamento'
 }
 
-# URL do frontend para checkout
-CHECKOUT_URL = "http://localhost:3000/checkout"
-
-
 def criar_embed_bloqueio():
     """Cria embed de bloqueio por falta de assinatura."""
     embed = create_error_embed("Assinatura Necessária", "Este servidor não possui uma assinatura ativa.")

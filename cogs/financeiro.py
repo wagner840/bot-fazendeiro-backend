@@ -154,7 +154,7 @@ class FinanceiroCog(commands.Cog, name="Financeiro"):
 
 
     @commands.hybrid_command(name='pagar', aliases=['pagamento'], description="Realiza pagamento manual a um funcionário.")
-    @commands.has_permissions(manage_messages=True)
+    @commands.has_permissions(administrator=True)
     @empresa_configurada()
     async def pagar_funcionario(self, ctx, membro: discord.Member = None, valor: float = None, *, descricao: str = "Pagamento"):
         """Registra pagamento manual (Wizard ou Direto)."""
@@ -247,7 +247,7 @@ class FinanceiroCog(commands.Cog, name="Financeiro"):
             self.stop()
 
     @commands.command(name='pagarestoque', aliases=['pe'])
-    @commands.has_permissions(manage_messages=True)
+    @commands.has_permissions(administrator=True)
     @empresa_configurada()
     async def pagar_estoque(self, ctx, membro: discord.Member):
         """Paga e zera estoque do funcionário (Menu Interativo)."""

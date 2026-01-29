@@ -181,80 +181,118 @@ from ui_utils import BaseMenuView, EMOJI_INFO, EMOJI_SUCCESS, EMOJI_LOADING
 class HelpSelect(discord.ui.Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="Visão Geral", value="geral", emoji="ℹ️", description="Comandos básicos"),
-            discord.SelectOption(label="Produção & Encomendas", value="producao", emoji="🏭", description="Fábrica, Estoque e Vendas"),
-            discord.SelectOption(label="Financeiro", value="financeiro", emoji="💰", description="Pagamentos e Caixa"),
-            discord.SelectOption(label="Administração", value="admin", emoji="🛡️", description="Empresas e Equipe"),
-            discord.SelectOption(label="Preços & Comissão", value="precos", emoji="💲", description="Configuração de Valores"),
-            discord.SelectOption(label="Assinatura", value="assinatura", emoji="🔐", description="Planos e Status")
+            discord.SelectOption(label="Visão Geral", value="geral", emoji="ℹ️", description="Comandos básicos e navegação"),
+            discord.SelectOption(label="Produção", value="producao", emoji="🏭", description="Fabricar, estoque e catálogo"),
+            discord.SelectOption(label="Encomendas", value="encomendas", emoji="📦", description="Pedidos e entregas"),
+            discord.SelectOption(label="Financeiro", value="financeiro", emoji="💰", description="Pagamentos e relatórios"),
+            discord.SelectOption(label="Preços", value="precos", emoji="💲", description="Tabela de preços e comissões"),
+            discord.SelectOption(label="Administração", value="admin", emoji="🛡️", description="Empresas, equipe e config"),
+            discord.SelectOption(label="Assinatura", value="assinatura", emoji="🔐", description="Planos e pagamento")
         ]
         super().__init__(placeholder="Escolha uma categoria...", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
         val = self.values[0]
         embed = discord.Embed(color=discord.Color.blue())
-        
+
         if val == "geral":
             embed.title = "ℹ️ Visão Geral"
             embed.description = (
-                "**Comandos Básicos:**\n"
-                "`!empresa` - Ver dados da empresa ativa\n"
-                "`!help` - Abrir este menu\n"
-                "\n**Para onde ir?**\n"
-                "Use o menu abaixo para explorar funcionalidades específicas."
+                "**Informações:**\n"
+                "`!help` - Abre este menu de ajuda\n"
+                "`!empresa` - Mostra dados da empresa ativa\n"
+                "`!empresas` - Lista todas as empresas do servidor\n"
+                "\n**Navegação:**\n"
+                "Use o menu abaixo para explorar cada categoria.\n"
+                "Comandos com `/` também funcionam com `!`"
             )
+
         elif val == "producao":
-            embed.title = "🏭 Produção & Encomendas"
+            embed.title = "🏭 Produção & Estoque"
             embed.description = (
-                "**Menu Principal:** `/produzir`\n"
-                "*Gerencie toda a fabricação aqui.*\n\n"
-                "**Vendas:** `/encomenda`\n"
-                "*Crie pedidos para clientes.*\n\n"
-                "**Outros:**\n"
-                "`!estoque` - Seu inventário pessoal\n"
-                "`!produtos` - Catálogo de referência\n"
-                "`!entregar [id]` - Finalizar entrega\n"
-                "`!deletar [cod]` - Descartar item"
+                "**Fabricação:**\n"
+                "`/produzir` - Registrar produção de itens\n"
+                "\n**Estoque:**\n"
+                "`/estoque` - Ver seu inventário pessoal\n"
+                "`!estoque @user` - Ver estoque de outro funcionário\n"
+                "`!estoqueglobal` - Ver estoque total da empresa\n"
+                "`!deletar` - Remover itens do seu estoque\n"
+                "\n**Catálogo:**\n"
+                "`!produtos` - Lista todos os produtos com códigos"
             )
+
+        elif val == "encomendas":
+            embed.title = "📦 Encomendas & Entregas"
+            embed.description = (
+                "**Criar Pedido:**\n"
+                "`/encomenda` - Abre wizard para nova encomenda\n"
+                "\n**Gerenciar:**\n"
+                "`!encomendas` - Lista pedidos pendentes\n"
+                "`!entregar` - Finaliza entrega (abre seletor)\n"
+                "`!entregar <id>` - Entrega encomenda específica\n"
+                "\n*Ao entregar, o estoque é debitado e a comissão calculada automaticamente.*"
+            )
+
         elif val == "financeiro":
             embed.title = "💰 Financeiro"
             embed.description = (
-                "**Pagamentos:** `/pagar`\n"
-                "*Wizard seguro para pagar funcionários.*\n\n"
-                "**Fluxo de Caixa:**\n"
-                "`!caixa` - Ver entradas e saídas\n"
-                "`!pagarestoque` - Pagar acumulado de produção"
+                "**Pagamentos:** *(Requer Admin)*\n"
+                "`/pagar` - Pagamento manual a funcionário\n"
+                "`/pagar @user 100 motivo` - Pagamento direto\n"
+                "`!pagarestoque @user` - Paga e zera estoque acumulado\n"
+                "\n**Relatórios:**\n"
+                "`!caixa` - Fluxo de caixa e saldos\n"
+                "\n*Pagamentos geram registro de transação automático.*"
             )
+
+        elif val == "precos":
+            embed.title = "💲 Preços & Comissões"
+            embed.description = (
+                "**Configurar Preços:** *(Requer Admin)*\n"
+                "`!configurarprecos` - Editor interativo por produto\n"
+                "`!configmin` - Auto-config preço MÍNIMO\n"
+                "`!configmedio` - Auto-config preço MÉDIO\n"
+                "`!configmax` - Auto-config preço MÁXIMO\n"
+                "\n**Comissão:** *(Requer Admin)*\n"
+                "`!comissao` - Define % de repasse (menu)\n"
+                "`!comissao 25` - Define 25% direto\n"
+                "\n**Visualizar:**\n"
+                "`!verprecos` - Tabela completa de preços\n"
+                "`!verprecos categoria` - Filtrar por categoria"
+            )
+
         elif val == "admin":
             embed.title = "🛡️ Administração"
             embed.description = (
-                "**Configuração:**\n"
-                "`/novaempresa` - Criar nova empresa\n"
-                "`!configurar` - Setup inicial\n"
-                "`!modopagamento` - Mudar modo (Produção/Entrega)\n\n"
-                "**Equipe:**\n"
-                "`!usuarios` - Ver lista\n"
-                "`!bemvindo` - Adicionar funcionário\n"
-                "`!promover` - Dar cargo de Admin"
-            )
-        elif val == "precos":
-            embed.title = "💲 Preços & Comissão"
-            embed.description = (
-                "**Preços:** `!configurarprecos`\n"
-                "*Define valor de venda e pagamento.*\n\n"
-                "**Comissão:** `!comissao`\n"
-                "*Define % global de repasse.*\n\n"
-                "**Tabelas:**\n"
-                "`!verprecos` - Ver tabela atual"
-            )
-        elif val == "assinatura":
-            embed.title = "🔐 Assinatura SaaS"
-            embed.description = (
-                "**Status:** `!assinatura`\n"
-                "**Assinar:** `!assinarpix` ou `!planos`\n"
-                "*Mantenha seu servidor ativo para continuar usando o bot.*"
+                "**Setup Inicial:** *(Requer Admin)*\n"
+                "`/configurar` - Wizard de configuração\n"
+                "`/novaempresa` - Adicionar nova empresa\n"
+                "`!modopagamento` - Alternar Produção/Entrega\n"
+                "\n**Equipe:** *(Requer Admin)*\n"
+                "`/bemvindo` - Cadastrar novo funcionário\n"
+                "`/bemvindo @user` - Cadastrar usuário específico\n"
+                "`!usuarios` - Listar acessos ao portal\n"
+                "`!promover @user` - Promover a Admin\n"
+                "`!removeracesso @user` - Remover acesso\n"
+                "\n**Utilitários:**\n"
+                "`!limparcache` - Recarregar dados do banco\n"
+                "`!limpar [n]` - Apagar n mensagens (max 100)\n"
+                "`!sync` - Sincronizar comandos slash"
             )
 
+        elif val == "assinatura":
+            embed.title = "🔐 Assinatura & Pagamento"
+            embed.description = (
+                "**Status:**\n"
+                "`!assinatura` - Ver status atual do servidor\n"
+                "\n**Assinar/Renovar:**\n"
+                "`!planos` - Ver planos disponíveis\n"
+                "`!assinarpix` - Gerar QR Code PIX\n"
+                "`!validarpagamento` - Confirmar pagamento manual\n"
+                "\n*Mantenha a assinatura ativa para usar o bot.*"
+            )
+
+        embed.set_footer(text="Use !help para voltar ao menu principal")
         await interaction.response.edit_message(embed=embed)
 
 class HelpMenuView(BaseMenuView):

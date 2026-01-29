@@ -274,6 +274,11 @@ class Assinatura(commands.Cog):
             plano_id = pagamento.get('plano_id')
             status_db = pagamento.get('status')
 
+            # Validação de segurança: garante que o pagamento pertence ao usuário
+            if pagamento.get('discord_id') and pagamento['discord_id'] != discord_id:
+                await ctx.send("❌ Este pagamento não pertence a você.")
+                return
+
             # 1. Vincular ao servidor atual se necessário
             if pagamento['guild_id'] != guild_id and pagamento['guild_id'] == 'pending_activation':
                 await ctx.send(f"🔗 Vinculando pagamento de R$ {valor} a este servidor...")

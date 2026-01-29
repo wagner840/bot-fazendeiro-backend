@@ -492,13 +492,18 @@ class AdminCog(commands.Cog, name="Administração"):
 
         try:
             from database import get_usuario_frontend, criar_usuario_frontend, atualizar_role_usuario_frontend
-            
+
             user_db = await get_usuario_frontend(discord_id, guild_id)
 
             if not user_db:
                 await criar_usuario_frontend(discord_id, guild_id, membro.display_name, 'admin')
                 await ctx.send(f"✅ {membro.mention} agora é **Admin** do frontend!")
             else:
+                # Verifica se já é admin antes de promover
+                if user_db.get('role') == 'admin':
+                    await ctx.send(f"⚠️ {membro.mention} já é **Admin** do frontend!")
+                    return
+
                 if await atualizar_role_usuario_frontend(user_db['id'], 'admin'):
                     await ctx.send(f"✅ {membro.mention} promovido para **Admin**!")
                 else:

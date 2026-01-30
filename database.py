@@ -580,11 +580,11 @@ async def get_estoque_global(empresa_id: int) -> List[Dict]:
     """Obtém estoque global da empresa."""
     try:
         produtos = await get_produtos_empresa(empresa_id)
-        
+
         response = supabase.table('estoque_produtos').select('*').eq(
             'empresa_id', empresa_id
         ).gt('quantidade', 0).execute()
-        
+
         totais = {}
         for item in response.data:
             codigo = item['produto_codigo']
@@ -592,11 +592,112 @@ async def get_estoque_global(empresa_id: int) -> List[Dict]:
                 nome = produtos.get(codigo, {}).get('produtos_referencia', {}).get('nome', codigo)
                 totais[codigo] = {'codigo': codigo, 'nome': nome, 'quantidade': 0}
             totais[codigo]['quantidade'] += item['quantidade']
-        
+
         return list(totais.values())
     except Exception as e:
         logger.error(f"Erro ao buscar estoque global: {e}")
         return []
+
+
+async def get_estoque_global_detalhado(empresa_id: int) -> Dict:
+    """
+    Obtém estoque global detalhado da empresa com informações de preço.
+    Retorna dict com código como chave e informações completas.
+    """
+    try:
+        produtos = await get_produtos_empresa(empresa_id)
+
+        response = supabase.table('estoque_produtos').select('*').eq(
+            'empresa_id', empresa_id
+        ).gt('quantidade', 0).execute()
+
+        totais = {}
+        for item in response.data:
+            codigo = item['produto_codigo']
+            if codigo not in totais:
+                prod_info = produtos.get(codigo, {})
+                nome = prod_info.get('produtos_referencia', {}).get('nome', codigo)
+                preco_func = prod_info.get('preco_pagamento_funcionario', 0)
+                totais[codigo] = {
+                    'codigo': codigo,
+                    'nome': nome,
+                    'quantidade': 0,
+                    'preco_funcionario': preco_func,
+                    'registros': []  # Lista de registros de estoque por funcionário
+                }
+            totais[codigo]['quantidade'] += item['quantidade']
+            totais[codigo]['registros'].append({
+                'id': item['id'],
+                'funcionario_id': item['funcionario_id'],
+                'quantidade': item['quantidade']
+            })
+
+        return totais
+    except Exception as e:
+        logger.error(f"Erro ao buscar estoque global detalhado: {e}")
+        return {}
+
+
+async def remover_do_estoque_global(empresa_id: int, codigo: str, quantidade: int) -> Optional[Dict]:
+    """
+    Remove quantidade do estoque global (de qualquer funcionário que tenha).
+    Usado no modo de pagamento 'entrega' onde o vendedor não precisa ter produzido.
+    Remove dos funcionários na ordem em que têm estoque (FIFO por ID).
+    Retorna informações do item removido incluindo preço para cálculo de comissão.
+    """
+    try:
+        produtos = await get_produtos_empresa(empresa_id)
+
+        if codigo.lower() not in produtos:
+            return {'erro': 'Produto não encontrado'}
+
+        produto = produtos[codigo.lower()]
+        nome = produto['produtos_referencia']['nome']
+        preco_funcionario = produto['preco_pagamento_funcionario']
+
+        # Busca todos os registros de estoque desse produto na empresa
+        response = supabase.table('estoque_produtos').select('*').eq(
+            'empresa_id', empresa_id
+        ).eq('produto_codigo', codigo.lower()).gt('quantidade', 0).order('id').execute()
+
+        if not response.data:
+            return {'erro': f'Produto {nome} não encontrado no estoque global'}
+
+        # Calcula total disponível
+        total_disponivel = sum(item['quantidade'] for item in response.data)
+
+        if quantidade > total_disponivel:
+            return {'erro': f'Quantidade insuficiente no estoque global. Disponível: {total_disponivel} {nome}'}
+
+        # Remove a quantidade necessária dos registros disponíveis
+        quantidade_restante = quantidade
+        for item in response.data:
+            if quantidade_restante <= 0:
+                break
+
+            disponivel_neste = item['quantidade']
+            a_remover = min(quantidade_restante, disponivel_neste)
+            nova_qtd = disponivel_neste - a_remover
+
+            if nova_qtd == 0:
+                supabase.table('estoque_produtos').delete().eq('id', item['id']).execute()
+            else:
+                supabase.table('estoque_produtos').update({
+                    'quantidade': nova_qtd,
+                    'data_atualizacao': datetime.utcnow().isoformat()
+                }).eq('id', item['id']).execute()
+
+            quantidade_restante -= a_remover
+
+        return {
+            'quantidade': total_disponivel - quantidade,
+            'nome': nome,
+            'removido': quantidade,
+            'preco_funcionario': preco_funcionario
+        }
+    except Exception as e:
+        logger.error(f"Erro ao remover do estoque global: {e}")
+        return None
 
 
 async def zerar_estoque_funcionario(funcionario_id: int, empresa_id: int) -> bool:

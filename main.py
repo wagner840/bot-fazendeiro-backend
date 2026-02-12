@@ -99,9 +99,21 @@ COMANDOS_LIVRES = {
     'validarpagamento'
 }
 
-def criar_embed_bloqueio():
+def criar_embed_bloqueio(assinatura: dict = None):
     """Cria embed de bloqueio por falta de assinatura."""
-    embed = create_error_embed("Assinatura Necessária", "Este servidor não possui uma assinatura ativa.")
+    is_trial_expired = assinatura and assinatura.get('tipo') == 'trial'
+
+    if is_trial_expired:
+        embed = create_error_embed(
+            "Período de Teste Expirado",
+            "Seu período de teste gratuito de 3 dias acabou. Assine agora para continuar usando o Bot Fazendeiro!"
+        )
+    else:
+        embed = create_error_embed(
+            "Assinatura Necessária",
+            "Este servidor não possui uma assinatura ativa."
+        )
+
     embed.add_field(
         name="🔗 Link para Pagamento",
         value=f"[Clique aqui para assinar]({CHECKOUT_URL})",
@@ -136,7 +148,7 @@ async def verificar_assinatura_global(ctx):
     assinatura = await verificar_assinatura_servidor(str(ctx.guild.id))
 
     if not assinatura.get('ativa'):
-        embed = criar_embed_bloqueio()
+        embed = criar_embed_bloqueio(assinatura)
         await ctx.send(embed=embed)
         return False
 

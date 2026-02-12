@@ -39,7 +39,7 @@ class PagamentoConfirmView(discord.ui.View):
             # 1. Update Balance (Manual calculation for now, but atomic RPC would be better)
             novo_saldo = float(Decimal(str(self.func_db['saldo'])) + Decimal(str(self.valor)))
             
-            supabase.table('funcionarios').update({
+            await supabase.table('funcionarios').update({
                 'saldo': novo_saldo
             }).eq('id', self.func_db['id']).execute()
             
@@ -211,7 +211,7 @@ class FinanceiroCog(commands.Cog, name="Financeiro"):
             # Processa Pagamento
             try:
                 # 1. Registra Histórico
-                supabase.table('historico_pagamentos').insert({
+                await supabase.table('historico_pagamentos').insert({
                     'funcionario_id': self.func_id,
                     'tipo': 'estoque_acumulado',
                     'valor': float(self.total_pagar),
@@ -220,19 +220,19 @@ class FinanceiroCog(commands.Cog, name="Financeiro"):
                 
                 # 2. Atualiza Saldo
                 # Get current balance fresh
-                f_data = supabase.table('funcionarios').select('saldo').eq('id', self.func_id).single().execute()
+                f_data = await supabase.table('funcionarios').select('saldo').eq('id', self.func_id).single().execute()
                 current_balance = float(f_data.data['saldo'])
                 
-                supabase.table('funcionarios').update({
+                await supabase.table('funcionarios').update({
                     'saldo': current_balance + float(self.total_pagar)
                 }).eq('id', self.func_id).execute()
                 
                 # 3. Limpa Estoque
-                supabase.table('estoque_produtos').delete().eq('funcionario_id', self.func_id).eq('empresa_id', self.empresa_id).execute()
+                await supabase.table('estoque_produtos').delete().eq('funcionario_id', self.func_id).eq('empresa_id', self.empresa_id).execute()
                 
                 # 4. Atualiza Comissões
                 if self.pendentes_ids:
-                    supabase.table('transacoes').update({'tipo': 'comissao_paga'}).in_('id', self.pendentes_ids).execute()
+                    await supabase.table('transacoes').update({'tipo': 'comissao_paga'}).in_('id', self.pendentes_ids).execute()
 
                 embed = create_success_embed("Pagamento Realizado!", f"Total Pago: **R$ {self.total_pagar:.2f}**")
                 await interaction.response.edit_message(embed=embed, view=None)
@@ -267,7 +267,7 @@ class FinanceiroCog(commands.Cog, name="Financeiro"):
                 valor_estoque += Decimal(str(item['preco_funcionario'])) * item['quantidade']
         
         # 2. Calcula Comissões
-        comissoes = supabase.table('transacoes').select('*').eq('empresa_id', empresa['id']).eq('funcionario_id', func['id']).eq('tipo', 'comissao_pendente').execute()
+        comissoes = await supabase.table('transacoes').select('*').eq('empresa_id', empresa['id']).eq('funcionario_id', func['id']).eq('tipo', 'comissao_pendente').execute()
         valor_pendente = Decimal('0')
         pendentes_ids = []
         if comissoes.data:
@@ -307,7 +307,7 @@ class FinanceiroCog(commands.Cog, name="Financeiro"):
         if not empresa:
             return
         
-        funcionarios = supabase.table('funcionarios').select('*').eq('empresa_id', empresa['id']).eq('ativo', True).execute()
+        funcionarios = await supabase.table('funcionarios').select('*').eq('empresa_id', empresa['id']).eq('ativo', True).execute()
         
         total_saldos = Decimal('0')
         total_estoque = Decimal('0')

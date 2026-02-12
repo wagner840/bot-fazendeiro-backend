@@ -91,6 +91,7 @@ class BaseMenuView(View):
     def __init__(self, *, user_id: int, timeout: int = 180):
         super().__init__(timeout=timeout)
         self.user_id = user_id
+        self.message = None
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user_id:
@@ -104,9 +105,11 @@ class BaseMenuView(View):
     async def on_timeout(self):
         for item in self.children:
             item.disabled = True
-        # Note: We can't edit the message easily without reference, 
-        # so we rely on the user trying to click and failing, 
-        # or we pass message ref in future if needed.
+        if self.message:
+            try:
+                await self.message.edit(view=self)
+            except discord.HTTPException:
+                pass
 
     async def on_error(self, interaction: discord.Interaction, error: Exception, item):
         await handle_interaction_error(interaction, error)

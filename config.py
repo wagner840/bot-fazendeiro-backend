@@ -1,5 +1,5 @@
 """
-Bot Multi-Empresa Downtown - Configurações
+Bot Multi-Empresa - Configurações
 Carrega variáveis de ambiente e inicializa conexões.
 """
 
@@ -7,7 +7,7 @@ import os
 import re
 from cachetools import TTLCache
 from dotenv import load_dotenv
-from supabase import create_client, Client
+from supabase import create_async_client, AsyncClient
 
 # Carrega variáveis de ambiente
 load_dotenv()
@@ -33,12 +33,34 @@ KEY_TO_USE = SUPABASE_SERVICE_ROLE_KEY if SUPABASE_SERVICE_ROLE_KEY else SUPABAS
 if not all([DISCORD_TOKEN, SUPABASE_URL, KEY_TO_USE]):
     raise ValueError("Variáveis de ambiente faltando (DISCORD_TOKEN, SUPABASE_URL, SUPABASE_KEY).")
 
-# Cliente Supabase
-supabase: Client = create_client(SUPABASE_URL, KEY_TO_USE)
+
+class _SupabaseProxy:
+    """Proxy que delega para o AsyncClient real após init.
+
+    Necessário porque 20+ arquivos fazem `from config import supabase`.
+    Com Python, `from X import Y` copia a referência no momento do import.
+    O proxy garante que todas as cópias apontam para o mesmo client real.
+    """
+    _client: AsyncClient | None = None
+
+    def __getattr__(self, name):
+        if self._client is None:
+            raise AttributeError(
+                f"Supabase not initialized. Call init_supabase() first. "
+                f"(Attempted to access '{name}')"
+            )
+        return getattr(self._client, name)
+
+
+supabase = _SupabaseProxy()
+
+
+async def init_supabase():
+    """Inicializa o client async. Chamar uma vez no startup."""
+    supabase._client = await create_async_client(SUPABASE_URL, KEY_TO_USE)
+
 
 # Configurações do Asaas
-ASAAS_API_KEY = os.getenv('ASAAS_API_KEY')
-# Prioriza URL de produção se não for especificada
 ASAAS_API_URL = os.getenv('ASAAS_API_URL', "https://www.asaas.com/api/v3")
 ASAAS_WEBHOOK_TOKEN = os.getenv('ASAAS_WEBHOOK_TOKEN')
 

@@ -66,7 +66,7 @@ async def test_pagar_estoque_complete(cog, mock_ctx, mock_dependencies, mock_bot
         {'id': 1, 'valor': 25.0},
         {'id': 2, 'valor': 25.0}
     ]
-    deps['supabase'].table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.execute.return_value = mock_select
+    deps['supabase'].table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.execute = AsyncMock(return_value=mock_select)
     
     # Total to pay should be 100.0
     
@@ -130,7 +130,7 @@ async def test_verificar_caixa(cog, mock_ctx, mock_dependencies):
         {'id': 101, 'nome': 'Func 1', 'saldo': 100.0},
         {'id': 102, 'nome': 'Func 2', 'saldo': 0.0}
     ]
-    deps['supabase'].table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_select
+    deps['supabase'].table.return_value.select.return_value.eq.return_value.eq.return_value.execute = AsyncMock(return_value=mock_select)
     
     # Mock stock for Func 1 (0) and Func 2 (50.0)
     async def side_effect(func_id, emp_id):

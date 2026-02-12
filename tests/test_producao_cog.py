@@ -39,17 +39,27 @@ def mock_dependencies():
     with patch('cogs.producao.selecionar_empresa', new_callable=AsyncMock) as mock_selecionar_empresa, \
          patch('cogs.producao.get_or_create_funcionario', new_callable=AsyncMock) as mock_get_funcionario, \
          patch('cogs.producao.get_produtos_empresa', new_callable=AsyncMock) as mock_get_produtos, \
-         patch('cogs.producao.adicionar_ao_estoque', new_callable=AsyncMock) as mock_add_estoque, \
-         patch('cogs.producao.remover_do_estoque', new_callable=AsyncMock) as mock_remove_estoque, \
+         patch('cogs.producao.ui_producao.adicionar_ao_estoque', new_callable=AsyncMock) as mock_add_estoque, \
+         patch('cogs.producao.entrega.remover_do_estoque', new_callable=AsyncMock) as mock_remove_estoque, \
          patch('cogs.producao.get_estoque_funcionario', new_callable=AsyncMock) as mock_get_estoque, \
+         patch('cogs.producao.entrega.get_estoque_funcionario', new_callable=AsyncMock) as mock_get_estoque_entrega, \
          patch('cogs.producao.get_funcionario_by_discord_id', new_callable=AsyncMock) as mock_get_func_discord, \
          patch('cogs.producao.supabase') as mock_supabase, \
+         patch('cogs.producao.entrega.supabase') as mock_supabase_entrega, \
          patch('utils.verificar_is_admin', new_callable=AsyncMock) as mock_verify_admin, \
          patch('config.PRODUTO_REGEX', MagicMock()) as mock_regex:
          
         mock_selecionar_empresa.return_value = {'id': 1, 'nome': 'Test Corp', 'modo_pagamento': 'producao'}
         mock_get_funcionario.return_value = 101
-        
+
+        # Setup async execute on supabase mocks (needed because .execute() is now awaited)
+        for sb_mock in [mock_supabase, mock_supabase_entrega]:
+            qb = MagicMock()
+            qb.execute = AsyncMock(return_value=MagicMock(data=[]))
+            for attr in ['select', 'eq', 'update', 'insert', 'delete', 'order', 'gt', 'in_', 'is_', 'or_', 'limit', 'upsert', 'single', 'table']:
+                getattr(qb, attr).return_value = qb
+            sb_mock.table.return_value = qb
+
         # Default admin check to False
         mock_verify_admin.return_value = False
         
@@ -65,8 +75,10 @@ def mock_dependencies():
             'add_estoque': mock_add_estoque,
             'remove_estoque': mock_remove_estoque,
             'get_estoque': mock_get_estoque,
+            'get_estoque_entrega': mock_get_estoque_entrega,
             'get_func_discord': mock_get_func_discord,
             'supabase': mock_supabase,
+            'supabase_entrega': mock_supabase_entrega,
             'verify_admin': mock_verify_admin
         }
 
@@ -117,7 +129,7 @@ async def test_nova_encomenda_rapida(cog, mock_ctx, mock_dependencies):
     }
     mock_execute = MagicMock()
     mock_execute.data = [{'id': 555}]
-    deps['supabase'].table.return_value.insert.return_value.execute.return_value = mock_execute
+    deps['supabase'].table.return_value.insert.return_value.execute = AsyncMock(return_value=mock_execute)
 
     await cog.nova_encomenda.callback(cog, mock_ctx, entrada='"Cliente Teste" pa 10')
 
@@ -144,7 +156,7 @@ async def test_nova_encomenda_interactive(cog, mock_bot, mock_ctx, mock_dependen
     }
     mock_execute = MagicMock()
     mock_execute.data = [{'id': 666}]
-    deps['supabase'].table.return_value.insert.return_value.execute.return_value = mock_execute
+    deps['supabase'].table.return_value.insert.return_value.execute = AsyncMock(return_value=mock_execute)
 
     msg1 = AsyncMock(); msg1.content = "Cliente Interativo"; msg1.author = mock_ctx.author; msg1.channel = mock_ctx.channel
     msg2 = AsyncMock(); msg2.content = "p1 5"; msg2.author = mock_ctx.author; msg2.channel = mock_ctx.channel
@@ -187,23 +199,24 @@ async def test_display_commands(cog, mock_ctx, mock_dependencies):
     mock_select.data = [{
         'id': 1, 'status': 'pendente', 'itens_json': [{'codigo': 'p1', 'quantidade': 1}], 'valor_total': 20.0, 'comprador': 'C', 'funcionarios': {'nome': 'F'}
     }]
-    deps['supabase'].table.return_value.select.return_value.eq.return_value.in_.return_value.order.return_value.execute.return_value = mock_select
+    deps['supabase'].table.return_value.select.return_value.eq.return_value.in_.return_value.order.return_value.execute = AsyncMock(return_value=mock_select)
     await cog.ver_encomendas.callback(cog, mock_ctx)
 
 @pytest.mark.asyncio
 async def test_entregar_encomenda_success(cog, mock_ctx, mock_dependencies):
     deps = mock_dependencies
     deps['get_func_discord'].return_value = {'id': 101, 'nome': 'Func 1'}
-    
+
     mock_select = MagicMock()
     mock_select.data = [{
-        'id': 123, 'status': 'pendente', 
-        'itens_json': [{'codigo': 'pa', 'quantidade': 5, 'quantidade_entregue': 0, 'valor_unitario': 50.0}],
+        'id': 123, 'status': 'pendente',
+        'itens_json': [{'codigo': 'pa', 'quantidade': 5, 'quantidade_entregue': 0, 'valor_unitario': 50.0, 'nome': 'Produto A'}],
         'valor_total': 250.0, 'comprador': 'Cliente Teste'
     }]
-    deps['supabase'].table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_select
-    deps['get_estoque'].return_value = [{'produto_codigo': 'pa', 'quantidade': 10, 'preco_funcionario': 10.0}]
-    
+    deps['supabase'].table.return_value.select.return_value.eq.return_value.eq.return_value.execute = AsyncMock(return_value=mock_select)
+    deps['supabase_entrega'].table.return_value.select.return_value.eq.return_value.eq.return_value.execute = AsyncMock(return_value=mock_select)
+    deps['get_estoque_entrega'].return_value = [{'produto_codigo': 'pa', 'quantidade': 10, 'preco_funcionario': 10.0}]
+
     await cog.entregar_encomenda.callback(cog, mock_ctx, encomenda_id=123)
     deps['remove_estoque'].assert_called()
 
@@ -212,17 +225,18 @@ async def test_entregar_encomenda_insufficient_stock(cog, mock_bot, mock_ctx, mo
     """Test delivery with insufficient stock requiring confirmation."""
     deps = mock_dependencies
     deps['get_func_discord'].return_value = {'id': 101, 'nome': 'Func 1'}
-    
+
     mock_select = MagicMock()
     mock_select.data = [{
-        'id': 124, 'status': 'pendente', 
-        'itens_json': [{'codigo': 'pa', 'quantidade': 10, 'nome': 'Pa'}],
+        'id': 124, 'status': 'pendente',
+        'itens_json': [{'codigo': 'pa', 'quantidade': 10, 'nome': 'Pa', 'quantidade_entregue': 0}],
         'valor_total': 500.0, 'comprador': 'Cliente Teste'
     }]
-    deps['supabase'].table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_select
-    
-    # User has 5, needs 10 (Missign 5)
-    deps['get_estoque'].return_value = [{'produto_codigo': 'pa', 'quantidade': 5, 'preco_funcionario': 10.0}]
+    deps['supabase'].table.return_value.select.return_value.eq.return_value.eq.return_value.execute = AsyncMock(return_value=mock_select)
+    deps['supabase_entrega'].table.return_value.select.return_value.eq.return_value.eq.return_value.execute = AsyncMock(return_value=mock_select)
+
+    # User has 5, needs 10 (Missing 5)
+    deps['get_estoque_entrega'].return_value = [{'produto_codigo': 'pa', 'quantidade': 5, 'preco_funcionario': 10.0}]
     
     # Mock confirmation "sim"
     msg = AsyncMock(); msg.content = "sim"; msg.author = mock_ctx.author; msg.channel = mock_ctx.channel

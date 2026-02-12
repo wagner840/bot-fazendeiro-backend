@@ -21,11 +21,12 @@ async def verificar_assinatura_servidor(guild_id: str) -> dict:
             'status': None,
             'dias_restantes': 0,
             'data_expiracao': None,
-            'plano_nome': None
+            'plano_nome': None,
+            'tipo': None
         }
     except Exception as e:
         logger.error(f"Erro ao verificar assinatura: {e}")
-        return {'ativa': False, 'status': 'erro', 'dias_restantes': 0}
+        return {'ativa': False, 'status': 'erro', 'dias_restantes': 0, 'tipo': None}
 
 
 async def get_assinatura_servidor(guild_id: str) -> Optional[Dict]:

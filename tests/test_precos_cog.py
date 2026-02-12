@@ -41,11 +41,18 @@ def cog(mock_bot):
 @pytest.fixture
 def mock_dependencies():
     with patch('cogs.precos.selecionar_empresa', new_callable=AsyncMock) as mock_selecionar_empresa, \
-         patch('cogs.precos.get_produtos_referencia', new_callable=AsyncMock) as mock_get_ref, \
+         patch('cogs.precos.auto_config.get_produtos_referencia', new_callable=AsyncMock) as mock_get_ref, \
          patch('cogs.precos.get_produtos_empresa', new_callable=AsyncMock) as mock_get_empresa, \
-         patch('cogs.precos.configurar_produto_empresa', new_callable=AsyncMock) as mock_config_prod, \
+         patch('cogs.precos.auto_config.configurar_produto_empresa', new_callable=AsyncMock) as mock_config_prod, \
          patch('cogs.precos.supabase') as mock_supabase:
-        
+
+        # Make execute() async since all .execute() calls are now awaited
+        qb = MagicMock()
+        qb.execute = AsyncMock(return_value=MagicMock(data=[]))
+        qb.update.return_value = qb
+        qb.eq.return_value = qb
+        mock_supabase.table.return_value = qb
+
         mock_selecionar_empresa.return_value = {
             'id': 1, 'nome': 'Test Corp', 'tipo_empresa_id': 1
         }

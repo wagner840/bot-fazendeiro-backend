@@ -1,4 +1,5 @@
 import os
+import hmac
 import aiohttp
 from fastapi import FastAPI, HTTPException, Request, Header
 from fastapi.responses import Response
@@ -6,7 +7,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
 from typing import Optional
 from dotenv import load_dotenv
-from supabase import create_client, Client
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import datetime
@@ -18,8 +18,7 @@ from logging_config import logger
 load_dotenv()
 
 # Configuration
-# Configuration
-from config import ASAAS_API_KEY, ASAAS_API_URL, ASAAS_WEBHOOK_TOKEN, supabase, FRONTEND_URL
+from config import ASAAS_API_KEY, ASAAS_API_URL, ASAAS_WEBHOOK_TOKEN, supabase, FRONTEND_URL, init_supabase
 
 if ASAAS_API_KEY:
     logger.info(f"ASAAS_API_KEY loaded. Length: {len(ASAAS_API_KEY)}")
@@ -28,6 +27,12 @@ else:
     logger.warning("ASAAS_API_KEY NOT loaded.")
 # Initialize clients
 app = FastAPI()
+
+# Startup event: initialize Supabase async client
+@app.on_event("startup")
+async def startup_event():
+    await init_supabase()
+    logger.info("Supabase async client initialized (API).")
 
 # CORS Middleware
 origins = [
@@ -96,7 +101,7 @@ async def create_pix_charge(req: PixChargeRequest):
     async with aiohttp.ClientSession() as session:
         # 1. Fetch Plan Details
         try:
-            plan_resp = supabase.table('planos').select('*').eq('id', req.plano_id).single().execute()
+            plan_resp = await supabase.table('planos').select('*').eq('id', req.plano_id).single().execute()
             if not plan_resp.data:
                 logger.warning(f"Plan not found: {req.plano_id}")
                 raise HTTPException(status_code=404, detail="Plano not found")
@@ -108,10 +113,10 @@ async def create_pix_charge(req: PixChargeRequest):
         # 2. Create/Get Customer in Asaas
         # Use provided email or fallback to a dummy one
         customer_email = req.email or f"user_{req.pagador_discord_id}@fazendeiro.bot"
-        
+
         customer_data = {
             "name": f"User {req.pagador_discord_id}",
-            "email": customer_email, 
+            "email": customer_email,
             "cpfCnpj": req.cpf_cnpj, # Critical for PIX
             "externalReference": req.pagador_discord_id
         }
@@ -120,7 +125,7 @@ async def create_pix_charge(req: PixChargeRequest):
             if resp.status != 200:
                 text = await resp.text()
                 logger.warning(f"Asaas Customer Creation Error: {text}")
-                
+
                 if "customer_email_unique" in text:
                      # Fallback: search by email
                      async with session.get(f"{current_asaas_url}/customers?email={customer_data['email']}", headers=headers) as search_resp:
@@ -128,7 +133,7 @@ async def create_pix_charge(req: PixChargeRequest):
                          if search_data.get('data') and len(search_data['data']) > 0:
                              customer_id = search_data['data'][0]['id']
                              logger.info(f"Found existing customer: {customer_id}")
-                             
+
                              # UPDATE customer with new CPF/CNPJ
                              update_data = {"cpfCnpj": req.cpf_cnpj}
                              async with session.put(f"{current_asaas_url}/customers/{customer_id}", headers=headers, json=update_data) as update_resp:
@@ -137,10 +142,10 @@ async def create_pix_charge(req: PixChargeRequest):
                                  else:
                                      logger.warning(f"Failed to update customer CPF: {await update_resp.text()}")
 
-                         else: 
+                         else:
                              logger.error("Customer creation failed and search returned empty.")
                              raise HTTPException(status_code=400, detail=f"Customer creation failed: {text}")
-                else: 
+                else:
                      # Try to parse error
                      try:
                         customer_json = await resp.json()
@@ -158,7 +163,7 @@ async def create_pix_charge(req: PixChargeRequest):
 
         # 3. Create Payment
         due_date = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
-        
+
         charge_data = {
             "customer": customer_id,
             "billingType": "PIX",
@@ -190,14 +195,14 @@ async def create_pix_charge(req: PixChargeRequest):
                     text = await resp.text()
                     logger.error(f"Error retrieving QR Code: {text}")
                     raise HTTPException(status_code=500, detail=f"Error retrieving QR Code: {text}")
-        
+
         if not qr_data:
              logger.error("Timeout retrieving QR Code from Asaas after retries.")
              raise HTTPException(status_code=504, detail="Timeout retrieving QR Code from Asaas")
 
         # 5. Save to Database
         try:
-            supabase.table('pagamentos_pix').insert({
+            await supabase.table('pagamentos_pix').insert({
                 'pix_id': charge['id'],
                 'guild_id': req.guild_id,
                 'plano_id': req.plano_id,
@@ -209,43 +214,43 @@ async def create_pix_charge(req: PixChargeRequest):
                 'link_pagamento': charge.get('invoiceUrl')
             }).execute()
         except Exception as e:
-            logger.error(f"DB Error saving payment: {e}")
-            # Do not fail request if DB fails, as Payment IS created. User can retry or check web.
-            # But better to warn.
-            pass 
+            logger.warning(f"DB Error saving payment (payment already created in Asaas): {e}")
 
         return {
             "payment_id": charge['id'],
             "qrcode": f"data:image/png;base64,{qr_data['encodedImage']}",
             "copia_cola": qr_data['payload'],
-            "expiracao": due_date 
+            "expiracao": due_date
         }
 
 @app.post("/api/pix/webhook")
 async def handle_webhook(request: Request, asaas_access_token: Optional[str] = Header(None)):
     """Handles Asaas Webhooks."""
-    
+
     # 1. Security Verification
     if not ASAAS_WEBHOOK_TOKEN:
         logger.critical("SECURITY ALERT: ASAAS_WEBHOOK_TOKEN not configured! Rejecting webhook.")
         raise HTTPException(status_code=500, detail="Server misconfiguration: Webhook Token missing")
 
-    if asaas_access_token != ASAAS_WEBHOOK_TOKEN:
+    if not hmac.compare_digest(
+        (asaas_access_token or '').encode(),
+        ASAAS_WEBHOOK_TOKEN.encode()
+    ):
         logger.warning(f"Unauthorized Webhook attempt from {request.client.host}")
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     try:
         data = await request.json()
         logger.info(f"Webhook received: event={data.get('event')}, payment_id={data.get('payment', {}).get('id')}")
-        
+
         event = data.get('event')
         payment = data.get('payment')
-        
+
         if not payment:
             return {"status": "ignored", "reason": "no_payment_data"}
 
         payment_id = payment.get('id')
-        
+
         if event in ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED']:
             await process_payment_confirmation(payment_id)
             return {"status": "success", "action": "subscription_activated"}
@@ -264,13 +269,13 @@ async def verify_payment_endpoint(payment_id: str):
     Checks status in Asaas and updates DB if Paid.
     """
     logger.info(f"Manual verification requested for: {payment_id}")
-    
+
     # 1. Check local status first
     try:
-        local_record = supabase.table('pagamentos_pix').select('*').eq('pix_id', payment_id).single().execute()
+        local_record = await supabase.table('pagamentos_pix').select('*').eq('pix_id', payment_id).single().execute()
         if not local_record.data:
             raise HTTPException(status_code=404, detail="Payment not found")
-        
+
         if local_record.data['status'] == 'pago':
              return {"status": "pago", "message": "Payment already confirmed"}
     except Exception as e:
@@ -292,7 +297,7 @@ async def verify_payment_endpoint(payment_id: str):
             if resp.status == 200:
                 payment_data = await resp.json()
                 status = payment_data.get('status')
-                
+
                 if status in ['RECEIVED', 'CONFIRMED']:
                     # Active Confirmation!
                     await process_payment_confirmation(payment_id)
@@ -308,7 +313,7 @@ async def process_payment_confirmation(payment_id: str):
     logger.info(f"Processing confirmation for: {payment_id}")
 
     # Idempotency check: only process if not already paid
-    pay_record = supabase.table('pagamentos_pix').select('*').eq('pix_id', payment_id).single().execute()
+    pay_record = await supabase.table('pagamentos_pix').select('*').eq('pix_id', payment_id).single().execute()
 
     if not pay_record.data:
         logger.warning(f"Payment {payment_id} not found in database.")
@@ -319,7 +324,7 @@ async def process_payment_confirmation(payment_id: str):
         return
 
     # Update Payment Status
-    supabase.table('pagamentos_pix').update({'status': 'pago'}).eq('pix_id', payment_id).execute()
+    await supabase.table('pagamentos_pix').update({'status': 'pago'}).eq('pix_id', payment_id).execute()
 
     guild_id = pay_record.data['guild_id']
     plano_id = pay_record.data['plano_id']
@@ -330,27 +335,27 @@ async def process_payment_confirmation(payment_id: str):
         return
 
     # Fetch plan duration
-    plano = supabase.table('planos').select('*').eq('id', plano_id).single().execute()
+    plano = await supabase.table('planos').select('*').eq('id', plano_id).single().execute()
     days = plano.data['duracao_dias']
 
     # Calculate expiration
-    expiration = (datetime.datetime.now() + datetime.timedelta(days=days)).isoformat()
+    now = datetime.datetime.now(datetime.timezone.utc)
+    expiration = (now + datetime.timedelta(days=days)).isoformat()
 
     # Update/Create Subscription
-    existing = supabase.table('assinaturas').select('*').eq('guild_id', guild_id).execute()
+    existing = await supabase.table('assinaturas').select('*').eq('guild_id', guild_id).execute()
 
     subscription_data = {
         'plano_id': plano_id,
-        'data_inicio': datetime.datetime.now().isoformat(),
+        'data_inicio': now.isoformat(),
         'data_expiracao': expiration,
         'status': 'ativa',
-        'pagamento_status': 'pago'
     }
 
     if existing.data:
-        supabase.table('assinaturas').update(subscription_data).eq('guild_id', guild_id).execute()
+        await supabase.table('assinaturas').update(subscription_data).eq('guild_id', guild_id).execute()
         logger.info(f"Subscription updated for guild {guild_id}")
     else:
         subscription_data['guild_id'] = guild_id
-        supabase.table('assinaturas').insert(subscription_data).execute()
+        await supabase.table('assinaturas').insert(subscription_data).execute()
         logger.info(f"Subscription created for guild {guild_id}")

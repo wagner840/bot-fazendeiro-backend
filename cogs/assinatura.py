@@ -327,7 +327,7 @@ class Assinatura(commands.Cog):
             if status_real in ['RECEIVED', 'CONFIRMED']:
                 await ctx.send("💸 Pagamento confirmado! Finalizando configuração...")
                 
-                supabase.table('pagamentos_pix').update({'status': 'pago'}).eq('pix_id', pix_id).execute()
+                await supabase.table('pagamentos_pix').update({'status': 'pago'}).eq('pix_id', pix_id).execute()
                 
                 success = await ativar_assinatura_servidor(guild_id, plano_id, discord_id)
                 

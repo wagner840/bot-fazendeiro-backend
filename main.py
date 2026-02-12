@@ -1,5 +1,5 @@
 """
-Bot Multi-Empresa Downtown - Sistema de Gerenciamento Econômico para Roleplay (RDR2)
+Bot Fazendeiro - Sistema de Gerenciamento Econômico Multi-Servidor para Roleplay (RDR2)
 Desenvolvido para Discord com integração Supabase
 Versão modularizada com Cogs
 """
@@ -8,7 +8,7 @@ import asyncio
 import discord
 from discord.ext import commands
 
-from config import DISCORD_TOKEN, supabase
+from config import DISCORD_TOKEN, supabase, init_supabase
 from database import get_empresas_by_guild, get_produtos_empresa, verificar_assinatura_servidor
 from utils import selecionar_empresa
 from ui_utils import create_error_embed
@@ -35,22 +35,15 @@ bot = commands.Bot(command_prefix='!', intents=intents, help_command=None)
 async def on_ready():
     """Bot está pronto."""
     logger.info('============================================')
-    logger.info('  Bot Multi-Empresa Downtown conectado!')
+    logger.info('  Bot Fazendeiro conectado!')
     logger.info(f'  Usuario: {bot.user.name}')
     logger.info(f'  Servidores: {len(bot.guilds)}')
     logger.info('============================================')
-    
-    # Sync Slash Commands
-    try:
-        synced = await bot.tree.sync()
-        logger.info(f"  [SYNC] {len(synced)} slash commands sincronizados.")
-    except Exception as e:
-        logger.error(f"  [ERRO] Falha ao sincronizar commands: {e}")
-    
+
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.watching,
-            name="Downtown | !help"
+            name="Bot Fazendeiro | !help"
         )
     )
 
@@ -72,7 +65,7 @@ class SetupWizardView(discord.ui.View):
 async def on_guild_join(guild):
     """Quando bot entra em novo servidor."""
     canal = guild.system_channel or guild.text_channels[0]
-    
+
     embed = discord.Embed(
         title="🏢 Bem-vindo ao Bot Fazendeiro!",
         description=(
@@ -88,7 +81,7 @@ async def on_guild_join(guild):
     )
     embed.set_thumbnail(url=bot.user.avatar.url if bot.user.avatar else None)
     embed.set_footer(text="Bot Fazendeiro | Advanced Management Solutions")
-    
+
     view = SetupWizardView()
     await canal.send(embed=embed, view=view)
 
@@ -129,24 +122,24 @@ async def verificar_assinatura_global(ctx):
     # Comandos livres não precisam de verificação
     if ctx.command and ctx.command.name in COMANDOS_LIVRES:
         return True
-    
+
     # Também libera aliases dos comandos
     if ctx.invoked_with and ctx.invoked_with.lower() in COMANDOS_LIVRES:
         return True
-    
+
     # Se não tiver guild (DM), bloqueia
     if not ctx.guild:
         await ctx.send("❌ Este bot só funciona em servidores!")
         return False
-    
+
     # Verifica assinatura do servidor
     assinatura = await verificar_assinatura_servidor(str(ctx.guild.id))
-    
+
     if not assinatura.get('ativa'):
         embed = criar_embed_bloqueio()
         await ctx.send(embed=embed)
         return False
-    
+
     return True
 
 
@@ -307,7 +300,7 @@ class HelpMenuView(BaseMenuView):
 async def ajuda(ctx):
     """Abre o menu interativo de ajuda."""
     embed = discord.Embed(
-        title="🏢 Central de Ajuda Downtown",
+        title="🏢 Central de Ajuda - Bot Fazendeiro",
         description="Selecione uma categoria abaixo para ver os comandos.",
         color=discord.Color.blue()
     )
@@ -345,29 +338,29 @@ async def info_empresa(ctx):
     if not ctx.empresas_lista:
         await ctx.send("❌ Nenhuma empresa configurada.")
         return
-        
+
     if len(ctx.empresas_lista) == 1:
         ctx.empresa = ctx.empresas_lista[0]
     else:
         ctx.empresa = await selecionar_empresa(ctx)
-        
+
     empresa = ctx.empresa
     if not empresa:
         return
-    
+
     produtos = await get_produtos_empresa(empresa['id'])
-    funcionarios = supabase.table('funcionarios').select('id').eq('empresa_id', empresa['id']).execute()
-    
+    funcionarios = await supabase.table('funcionarios').select('id').eq('empresa_id', empresa['id']).execute()
+
     embed = discord.Embed(
         title=f"{empresa['tipos_empresa']['icone']} {empresa['nome']}",
         description=f"**Tipo:** {empresa['tipos_empresa']['nome']}",
         color=discord.Color.from_str(empresa['tipos_empresa'].get('cor_hex', '#10b981'))
     )
-    
+
     embed.add_field(name="📦 Produtos", value=f"{len(produtos)} configurados")
     embed.add_field(name="👷 Funcionários", value=f"{len(funcionarios.data)} cadastrados")
     embed.add_field(name="📅 Criada em", value=empresa['data_criacao'][:10])
-    
+
     await ctx.send(embed=embed)
 
 
@@ -384,7 +377,7 @@ async def load_cogs():
         'cogs.financeiro',
         'cogs.assinatura'
     ]
-    
+
     for cog in cogs:
         try:
             await bot.load_extension(cog)
@@ -399,10 +392,15 @@ async def load_cogs():
 
 async def main():
     """Função principal."""
-    logger.info("Iniciando Bot Multi-Empresa Downtown...")
+    logger.info("Iniciando Bot Fazendeiro...")
+
+    # Inicializa Supabase async client
+    await init_supabase()
+    logger.info("  [OK] Supabase async client inicializado.")
+
     logger.info("Carregando Cogs...")
     await load_cogs()
-    
+
     # Run Bot Only (API must be run separately via uvicorn)
     await bot.start(DISCORD_TOKEN)
 
@@ -413,4 +411,3 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         # Handle manual stop gracefully
         pass
-

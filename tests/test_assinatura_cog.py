@@ -97,11 +97,11 @@ async def test_superadmin_add_tester(cog, mock_ctx, mock_env):
 @pytest.mark.asyncio
 async def test_validar_pagamento_pendente(cog, mock_ctx):
     # Need to mock local imports inside validarpagamento
-    with patch('database.buscar_pagamento_pendente_usuario', new_callable=AsyncMock) as mock_buscar, \
+    with patch('cogs.assinatura.buscar_pagamento_pendente_usuario', new_callable=AsyncMock) as mock_buscar, \
          patch('aiohttp.ClientSession') as MockSession, \
-         patch('config.ASAAS_API_KEY', "key"), \
-         patch('database.ativar_assinatura_servidor', new_callable=AsyncMock) as mock_ativar, \
-         patch('config.supabase') as mock_supabase:
+         patch('cogs.assinatura.ASAAS_API_KEY', "key"), \
+         patch('cogs.assinatura.ativar_assinatura_servidor', new_callable=AsyncMock) as mock_ativar, \
+         patch('cogs.assinatura.supabase') as mock_supabase:
          
         # Mock payment found
         mock_buscar.return_value = {
@@ -126,7 +126,7 @@ async def test_validar_pagamento_pendente(cog, mock_ctx):
         response_ctx.__aenter__.return_value = response
         
         mock_ativar.return_value = True
-        mock_supabase.table.return_value.update.return_value.eq.return_value.execute = MagicMock()
+        mock_supabase.table.return_value.update.return_value.eq.return_value.execute = AsyncMock()
 
         await cog.validar_pagamento.callback(cog, mock_ctx)
         

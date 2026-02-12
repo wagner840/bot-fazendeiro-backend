@@ -81,7 +81,7 @@ async def test_listar_usuarios(cog, mock_ctx, mock_env):
         {'nome': 'Admin', 'role': 'admin', 'discord_id': '1'},
         {'nome': 'Func', 'role': 'funcionario', 'discord_id': '2'}
     ]
-    deps['supabase'].table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_select
+    deps['supabase'].table.return_value.select.return_value.eq.return_value.eq.return_value.execute = AsyncMock(return_value=mock_select)
     
     await cog.listar_usuarios.callback(cog, mock_ctx)
     
@@ -104,7 +104,7 @@ async def test_promover_usuario(cog, mock_ctx, mock_env):
     # Mock existing user
     mock_select = MagicMock()
     mock_select.data = [{'id': 55, 'role': 'funcionario'}]
-    deps['supabase'].table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_select
+    deps['supabase'].table.return_value.select.return_value.eq.return_value.eq.return_value.execute = AsyncMock(return_value=mock_select)
     
     # Patch database functions
     with patch('database.get_usuario_frontend', new_callable=AsyncMock) as mock_get_u, \

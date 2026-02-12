@@ -47,14 +47,11 @@ async def test_get_produtos_referencia_global_only(mock_supabase, mock_config):
     guild_id = None
     tipo_empresa_id = 1
     
-    mock_supabase.execute.return_value.data = []
-    
+    query_builder = mock_supabase.table.return_value
+    query_builder.execute.return_value.data = []
+
     # Act
     await get_produtos_referencia(tipo_empresa_id, guild_id)
-
-    # Assert
-    # Verify correct filter for global only
-    query_builder = mock_supabase.table.return_value
     query_builder.is_.assert_called_with('guild_id', 'null')
     # Ensure .or_ was NOT called
     query_builder.or_.assert_not_called()

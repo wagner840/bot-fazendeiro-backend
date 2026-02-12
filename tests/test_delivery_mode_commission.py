@@ -15,14 +15,24 @@ from decimal import Decimal
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
+def _setup_async_supabase(mock):
+    """Configure a MagicMock to behave like an async supabase client."""
+    qb = MagicMock()
+    qb.execute = AsyncMock(return_value=MagicMock(data=[]))
+    for attr in ['select', 'eq', 'update', 'insert', 'delete', 'order', 'gt', 'in_', 'is_', 'or_', 'limit', 'upsert', 'single', 'table']:
+        getattr(qb, attr).return_value = qb
+    mock.table.return_value = qb
+    return qb
+
+
 class TestDatabaseFunctions:
     """Testes para as novas funções de banco de dados."""
 
     @pytest.mark.asyncio
     async def test_get_estoque_global_detalhado(self):
         """Testa se get_estoque_global_detalhado retorna dados com preço."""
-        with patch('database.supabase') as mock_supabase, \
-             patch('database.get_produtos_empresa', new_callable=AsyncMock) as mock_get_produtos:
+        with patch('database.estoque.supabase') as mock_supabase, \
+             patch('database.estoque.get_produtos_empresa', new_callable=AsyncMock) as mock_get_produtos:
 
             # Mock produtos
             mock_get_produtos.return_value = {
@@ -43,7 +53,7 @@ class TestDatabaseFunctions:
                 {'id': 2, 'funcionario_id': 102, 'produto_codigo': 'prod1', 'quantidade': 30},
                 {'id': 3, 'funcionario_id': 101, 'produto_codigo': 'prod2', 'quantidade': 20},
             ]
-            mock_supabase.table.return_value.select.return_value.eq.return_value.gt.return_value.execute.return_value = mock_response
+            mock_supabase.table.return_value.select.return_value.eq.return_value.gt.return_value.execute = AsyncMock(return_value=mock_response)
 
             from database import get_estoque_global_detalhado
             result = await get_estoque_global_detalhado(empresa_id=1)
@@ -67,8 +77,8 @@ class TestDatabaseFunctions:
     @pytest.mark.asyncio
     async def test_remover_do_estoque_global_success(self):
         """Testa remoção do estoque global com sucesso."""
-        with patch('database.supabase') as mock_supabase, \
-             patch('database.get_produtos_empresa', new_callable=AsyncMock) as mock_get_produtos:
+        with patch('database.estoque.supabase') as mock_supabase, \
+             patch('database.estoque.get_produtos_empresa', new_callable=AsyncMock) as mock_get_produtos:
 
             mock_get_produtos.return_value = {
                 'prod1': {
@@ -77,13 +87,16 @@ class TestDatabaseFunctions:
                 }
             }
 
+            # Setup async chain
+            qb = _setup_async_supabase(mock_supabase)
+
             # Mock estoque disponível
             mock_response = MagicMock()
             mock_response.data = [
                 {'id': 1, 'funcionario_id': 101, 'quantidade': 30},
                 {'id': 2, 'funcionario_id': 102, 'quantidade': 20},
             ]
-            mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.gt.return_value.order.return_value.execute.return_value = mock_response
+            qb.execute = AsyncMock(return_value=mock_response)
 
             from database import remover_do_estoque_global
             result = await remover_do_estoque_global(empresa_id=1, codigo='prod1', quantidade=25)
@@ -100,8 +113,8 @@ class TestDatabaseFunctions:
     @pytest.mark.asyncio
     async def test_remover_do_estoque_global_insufficient(self):
         """Testa erro quando não há estoque suficiente."""
-        with patch('database.supabase') as mock_supabase, \
-             patch('database.get_produtos_empresa', new_callable=AsyncMock) as mock_get_produtos:
+        with patch('database.estoque.supabase') as mock_supabase, \
+             patch('database.estoque.get_produtos_empresa', new_callable=AsyncMock) as mock_get_produtos:
 
             mock_get_produtos.return_value = {
                 'prod1': {
@@ -115,7 +128,7 @@ class TestDatabaseFunctions:
             mock_response.data = [
                 {'id': 1, 'funcionario_id': 101, 'quantidade': 10},
             ]
-            mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.gt.return_value.order.return_value.execute.return_value = mock_response
+            mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.gt.return_value.order.return_value.execute = AsyncMock(return_value=mock_response)
 
             from database import remover_do_estoque_global
             result = await remover_do_estoque_global(empresa_id=1, codigo='prod1', quantidade=50)
@@ -155,9 +168,14 @@ class TestEntregarModoEntrega:
         """
         with patch('cogs.producao.selecionar_empresa', new_callable=AsyncMock) as mock_empresa, \
              patch('cogs.producao.get_funcionario_by_discord_id', new_callable=AsyncMock) as mock_get_func, \
-             patch('cogs.producao.get_estoque_global_detalhado', new_callable=AsyncMock) as mock_estoque_global, \
-             patch('cogs.producao.remover_do_estoque_global', new_callable=AsyncMock) as mock_remover_global, \
-             patch('cogs.producao.supabase') as mock_supabase:
+             patch('cogs.producao.entrega.get_estoque_global_detalhado', new_callable=AsyncMock) as mock_estoque_global, \
+             patch('cogs.producao.entrega.remover_do_estoque_global', new_callable=AsyncMock) as mock_remover_global, \
+             patch('cogs.producao.supabase') as mock_supabase_init, \
+             patch('cogs.producao.entrega.supabase') as mock_supabase:
+
+            # Setup async chains for supabase mocks
+            _setup_async_supabase(mock_supabase_init)
+            _setup_async_supabase(mock_supabase)
 
             # Empresa em modo ENTREGA
             mock_empresa.return_value = {
@@ -180,7 +198,7 @@ class TestEntregarModoEntrega:
                 }
             }
 
-            # Mock da encomenda
+            # Mock da encomenda (for __init__.py query)
             mock_select = MagicMock()
             mock_select.data = [{
                 'id': 500,
@@ -189,7 +207,7 @@ class TestEntregarModoEntrega:
                 'valor_total': 400.0,
                 'comprador': 'Cliente X'
             }]
-            mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_select
+            mock_supabase_init.table.return_value.select.return_value.eq.return_value.eq.return_value.execute = AsyncMock(return_value=mock_select)
 
             # Executa entrega
             await cog.entregar_encomenda.callback(cog, mock_ctx, encomenda_id=500)
@@ -222,8 +240,13 @@ class TestEntregarModoEntrega:
         """
         with patch('cogs.producao.selecionar_empresa', new_callable=AsyncMock) as mock_empresa, \
              patch('cogs.producao.get_funcionario_by_discord_id', new_callable=AsyncMock) as mock_get_func, \
-             patch('cogs.producao.get_estoque_global_detalhado', new_callable=AsyncMock) as mock_estoque_global, \
-             patch('cogs.producao.supabase') as mock_supabase:
+             patch('cogs.producao.entrega.get_estoque_global_detalhado', new_callable=AsyncMock) as mock_estoque_global, \
+             patch('cogs.producao.supabase') as mock_supabase_init, \
+             patch('cogs.producao.entrega.supabase') as mock_supabase:
+
+            # Setup async chains for supabase mocks
+            _setup_async_supabase(mock_supabase_init)
+            _setup_async_supabase(mock_supabase)
 
             # Empresa em modo ENTREGA
             mock_empresa.return_value = {
@@ -245,7 +268,7 @@ class TestEntregarModoEntrega:
                 }
             }
 
-            # Encomenda precisa de 20
+            # Encomenda precisa de 20 (mock in __init__.py)
             mock_select = MagicMock()
             mock_select.data = [{
                 'id': 501,
@@ -254,7 +277,7 @@ class TestEntregarModoEntrega:
                 'valor_total': 400.0,
                 'comprador': 'Cliente Y'
             }]
-            mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_select
+            mock_supabase_init.table.return_value.select.return_value.eq.return_value.eq.return_value.execute = AsyncMock(return_value=mock_select)
 
             await cog.entregar_encomenda.callback(cog, mock_ctx, encomenda_id=501)
 
@@ -296,9 +319,14 @@ class TestEntregarModoProducao:
         """
         with patch('cogs.producao.selecionar_empresa', new_callable=AsyncMock) as mock_empresa, \
              patch('cogs.producao.get_funcionario_by_discord_id', new_callable=AsyncMock) as mock_get_func, \
-             patch('cogs.producao.get_estoque_funcionario', new_callable=AsyncMock) as mock_estoque_func, \
-             patch('cogs.producao.remover_do_estoque', new_callable=AsyncMock) as mock_remover, \
-             patch('cogs.producao.supabase') as mock_supabase:
+             patch('cogs.producao.entrega.get_estoque_funcionario', new_callable=AsyncMock) as mock_estoque_func, \
+             patch('cogs.producao.entrega.remover_do_estoque', new_callable=AsyncMock) as mock_remover, \
+             patch('cogs.producao.supabase') as mock_supabase_init, \
+             patch('cogs.producao.entrega.supabase') as mock_supabase:
+
+            # Setup async chains for supabase mocks
+            _setup_async_supabase(mock_supabase_init)
+            _setup_async_supabase(mock_supabase)
 
             # Empresa em modo PRODUCAO
             mock_empresa.return_value = {
@@ -314,6 +342,7 @@ class TestEntregarModoProducao:
                 {'produto_codigo': 'prod1', 'quantidade': 50, 'preco_funcionario': 10.0}
             ]
 
+            # Mock encomenda query in __init__.py
             mock_select = MagicMock()
             mock_select.data = [{
                 'id': 600,
@@ -322,7 +351,7 @@ class TestEntregarModoProducao:
                 'valor_total': 400.0,
                 'comprador': 'Cliente Z'
             }]
-            mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_select
+            mock_supabase_init.table.return_value.execute = AsyncMock(return_value=mock_select)
 
             await cog.entregar_encomenda.callback(cog, mock_ctx, encomenda_id=600)
 
@@ -343,8 +372,13 @@ class TestEntregarModoProducao:
         """
         with patch('cogs.producao.selecionar_empresa', new_callable=AsyncMock) as mock_empresa, \
              patch('cogs.producao.get_funcionario_by_discord_id', new_callable=AsyncMock) as mock_get_func, \
-             patch('cogs.producao.get_estoque_funcionario', new_callable=AsyncMock) as mock_estoque_func, \
-             patch('cogs.producao.supabase') as mock_supabase:
+             patch('cogs.producao.entrega.get_estoque_funcionario', new_callable=AsyncMock) as mock_estoque_func, \
+             patch('cogs.producao.supabase') as mock_supabase_init, \
+             patch('cogs.producao.entrega.supabase') as mock_supabase:
+
+            # Setup async chains for supabase mocks
+            _setup_async_supabase(mock_supabase_init)
+            _setup_async_supabase(mock_supabase)
 
             # Empresa em modo PRODUCAO
             mock_empresa.return_value = {
@@ -358,6 +392,7 @@ class TestEntregarModoProducao:
             # Funcionário NÃO tem o produto (estoque vazio)
             mock_estoque_func.return_value = []
 
+            # Mock encomenda query in __init__.py
             mock_select = MagicMock()
             mock_select.data = [{
                 'id': 601,
@@ -366,7 +401,7 @@ class TestEntregarModoProducao:
                 'valor_total': 400.0,
                 'comprador': 'Cliente W'
             }]
-            mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_select
+            mock_supabase_init.table.return_value.execute = AsyncMock(return_value=mock_select)
 
             # Mock confirmação do usuário
             msg = AsyncMock()
@@ -416,21 +451,27 @@ class TestModoPagamentoSwitch:
         """Verifica que o modo de pagamento é lido corretamente da empresa."""
         with patch('cogs.producao.selecionar_empresa', new_callable=AsyncMock) as mock_empresa, \
              patch('cogs.producao.get_funcionario_by_discord_id', new_callable=AsyncMock) as mock_get_func, \
-             patch('cogs.producao.get_estoque_global_detalhado', new_callable=AsyncMock) as mock_global, \
-             patch('cogs.producao.get_estoque_funcionario', new_callable=AsyncMock) as mock_pessoal, \
-             patch('cogs.producao.supabase') as mock_supabase:
+             patch('cogs.producao.entrega.get_estoque_global_detalhado', new_callable=AsyncMock) as mock_global, \
+             patch('cogs.producao.entrega.get_estoque_funcionario', new_callable=AsyncMock) as mock_pessoal, \
+             patch('cogs.producao.supabase') as mock_supabase_init, \
+             patch('cogs.producao.entrega.supabase') as mock_supabase:
+
+            # Setup async chains for supabase mocks
+            _setup_async_supabase(mock_supabase_init)
+            _setup_async_supabase(mock_supabase)
 
             mock_get_func.return_value = {'id': 201, 'nome': 'Test'}
             mock_global.return_value = {}
             mock_pessoal.return_value = []
 
+            # Mock encomenda query in __init__.py
             mock_select = MagicMock()
             mock_select.data = [{
                 'id': 700, 'status': 'pendente',
                 'itens_json': [{'codigo': 'x', 'quantidade': 1, 'quantidade_entregue': 0, 'nome': 'X'}],
                 'valor_total': 10.0, 'comprador': 'C'
             }]
-            mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_select
+            mock_supabase_init.table.return_value.select.return_value.eq.return_value.eq.return_value.execute = AsyncMock(return_value=mock_select)
 
             # Teste modo ENTREGA
             mock_empresa.return_value = {'id': 1, 'nome': 'E', 'modo_pagamento': 'entrega'}

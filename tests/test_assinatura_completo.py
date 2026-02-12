@@ -316,14 +316,14 @@ async def cleanup_testes():
 
     # Remove pagamentos de teste
     try:
-        supabase.table('pagamentos_pix').delete().eq('guild_id', TEST_GUILD_ID).execute()
+        await supabase.table('pagamentos_pix').delete().eq('guild_id', TEST_GUILD_ID).execute()
         info("Pagamentos de teste removidos")
     except Exception as e:
         warn(f"Erro ao limpar pagamentos: {e}")
 
     # Remove assinaturas de teste
     try:
-        supabase.table('assinaturas').delete().eq('guild_id', TEST_GUILD_ID).execute()
+        await supabase.table('assinaturas').delete().eq('guild_id', TEST_GUILD_ID).execute()
         info("Assinaturas de teste removidas")
     except Exception as e:
         warn(f"Erro ao limpar assinaturas: {e}")

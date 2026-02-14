@@ -7,11 +7,12 @@ import asyncio
 import sys
 import os
 from datetime import datetime, timedelta
+import pytest
 
 # Adiciona o diretorio pai ao path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config import supabase
+from config import init_supabase, supabase
 from database import (
     verificar_assinatura_servidor,
     get_planos_disponiveis,
@@ -45,6 +46,16 @@ def header(msg): print(f"{Colors.HEADER}>>> {msg}{Colors.END}")
 E2E_GUILD_PAGAMENTO = "888888888888888881"  # Teste de pagamento
 E2E_GUILD_TESTER = "888888888888888882"     # Teste de tester
 E2E_GUILD_EXPIRADO = "888888888888888883"   # Teste de expiração
+
+pytestmark = pytest.mark.skipif(
+    os.getenv("RUN_E2E_TESTS") != "1",
+    reason="Set RUN_E2E_TESTS=1 to run integration tests against a real Supabase environment.",
+)
+
+
+@pytest.fixture(scope="module", autouse=True)
+async def setup_e2e_environment():
+    await init_supabase()
 
 # ============================================
 # FLUXO E2E 1: PAGAMENTO -> LIBERACAO

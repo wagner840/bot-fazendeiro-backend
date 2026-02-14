@@ -1,73 +1,129 @@
-# 🏢 Bot Fazendeiro Downtown
+# Bot Fazendeiro Downtown
 
-Bot Discord para gerenciamento econômico de empresas em servidores de roleplay (RDR2/RedM).
+SaaS multi-tenant para servidores Discord de RP (RDR2/RedM), com:
+- Bot Discord (operações de empresa e economia)
+- API FastAPI (PIX/Asaas, webhook, verificação)
+- Frontend React (painel de gestão)
+- Supabase/PostgreSQL (dados, RLS, RPC)
 
-## 🚀 Funcionalidades
+## Arquitetura
 
-- Múltiplos tipos de empresa (Jornal, Fazenda, Restaurante, etc.)
-- Gestão de estoque de funcionários
-- Sistema de encomendas
-- Configuração de preços (mínimo/médio/máximo)
-- Comissão configurável para funcionários
-- Integração com frontend React
+- Backend repo: `W:/Bot Fazendeiro`
+- Frontend repo (git separado): `W:/Bot Fazendeiro/frontend`
+- Banco: Supabase
+- Pagamentos: Asaas PIX
 
-## 📋 Requisitos
+Fluxo principal:
+1. Usuário autentica via Discord no frontend (Supabase Auth).
+2. Frontend chama API PIX com bearer token.
+3. API valida JWT + autorização por tenant (`usuarios_frontend`).
+4. Webhook Asaas confirma pagamento.
+5. API ativa assinatura no banco.
+6. Bot libera comandos via verificação de assinatura.
 
-- Python 3.10+
-- Discord Bot Token
-- Supabase Account
+## Variáveis de ambiente (backend)
 
-## ⚙️ Instalação
+`.env`:
 
-1. Clone o repositório
-2. Copie `.env.example` para `.env` e preencha:
-   ```
-   DISCORD_TOKEN=seu_token
-   SUPABASE_URL=sua_url
-   SUPABASE_KEY=sua_key
-   ```
-3. Instale dependências:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Execute:
-   ```bash
-   python main.py
-   ```
+```env
+DISCORD_TOKEN=
+SUPABASE_URL=
+SUPABASE_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
 
-## 📁 Estrutura
+ASAAS_API_KEY=
+ASAAS_API_URL=https://www.asaas.com/api/v3
+ASAAS_WEBHOOK_TOKEN=
 
-```
-├── main.py           # Bot principal
-├── api.py            # API & Webhooks
-├── .env              # Configurações (não commitar)
-├── docs/             # Documentação & Codemaps
-│   ├── CODEMAPS/     # <--- Mapas Arquiteturais
-│   ├── DOCUMENTACAO_BOT.md
-│   └── ...
-├── cogs/             # Módulos do Bot
-├── frontend/         # Frontend React
-└── data/             # Dados de referência
+FRONTEND_URL=http://localhost:3000
+SUPERADMIN_IDS=123,456
 ```
 
-## 🔧 Comandos Principais
+## Variáveis de ambiente (frontend)
 
-| Comando | Descrição |
-|---------|-----------|
-| `!configurar` | Configura empresa do servidor |
-| `!configmedio` | Preços médios + mostra tabela |
-| `!comissao 30` | Define comissão funcionários 30% |
-| `!verprecos` | Ver preços configurados |
-| `!help` | Lista todos os comandos |
+`frontend/.env`:
 
-## 🏗️ Arquitetura
+```env
+VITE_SUPABASE_URL=
+VITE_SUPABASE_KEY=
+VITE_API_URL=http://localhost:8000
+```
 
-Veja os mapas arquiteturais detalhados em [docs/CODEMAPS/INDEX.md](docs/CODEMAPS/INDEX.md).
+## Execução local
 
-- [Backend Codemap](docs/CODEMAPS/backend.md)
-- [Frontend Codemap](docs/CODEMAPS/frontend.md)
-- [Integrations Codemap](docs/CODEMAPS/integrations.md)
+Backend:
 
-## 📖 Documentação
+```bash
+pip install -r requirements.txt
+python main.py
+uvicorn api:app --reload --port 8000
+```
 
-Ver [docs/DOCUMENTACAO_BOT.md](docs/DOCUMENTACAO_BOT.md)
+Frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## Testes e validações
+
+Backend:
+
+```bash
+pytest -q
+```
+
+Notas:
+- Testes E2E reais de Supabase ficam desabilitados por padrão.
+- Para habilitar: `RUN_E2E_TESTS=1 pytest -q`.
+
+Frontend:
+
+```bash
+cd frontend
+npm test
+npm run build
+```
+
+## Ordem de deploy (Coolify)
+
+1. Aplicar migrations Supabase (`supabase/migrations`).
+2. Deploy API FastAPI (`api.py`).
+3. Deploy Bot Discord (`main.py`).
+4. Deploy Frontend (`frontend/Dockerfile` + `frontend/nginx.conf`).
+5. Rodar smoke test pós-deploy.
+
+## Healthchecks
+
+- API: `GET /`
+- API metrics: `GET /metrics`
+- Frontend: `GET /health` (nginx)
+
+## CI/CD
+
+- Backend pipeline: `.github/workflows/backend-ci-cd.yml`
+  - roda testes (`pytest -q`)
+  - dispara deploy API/Bot no Coolify via webhooks:
+    - `COOLIFY_API_DEPLOY_HOOK`
+    - `COOLIFY_BOT_DEPLOY_HOOK`
+- Frontend pipeline (repo frontend): `frontend/.github/workflows/frontend-ci-cd.yml`
+  - roda `npm test` + `npm run build`
+  - dispara deploy no Coolify com:
+    - `COOLIFY_FRONTEND_DEPLOY_HOOK`
+
+## Troubleshooting
+
+- `401 Unauthorized` em `/api/pix/create`:
+  - conferir bearer token e sessão Supabase no frontend.
+- `403 User has no access to this guild`:
+  - validar `usuarios_frontend` (`discord_id`, `guild_id`, `ativo=true`).
+- Webhook duplicado:
+  - verificar tabela `webhook_events` (idempotência).
+- Bot bloqueado mesmo após pagamento:
+  - validar `assinaturas` e executar `!limparcache`.
+
+## Documentação de produção
+
+Guia completo: `docs/DOCUMENTACAO_PRODUCAO_2026-02.md`.

@@ -3,6 +3,26 @@ import logging
 import sys
 from logging.handlers import RotatingFileHandler
 import os
+import json
+from datetime import datetime, timezone
+
+
+class JsonFormatter(logging.Formatter):
+    """Simple JSON formatter for production log aggregation."""
+
+    def format(self, record):
+        payload = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        for key in ("request_id", "guild_id", "payment_id", "discord_id"):
+            if hasattr(record, key):
+                payload[key] = getattr(record, key)
+        if record.exc_info:
+            payload["exception"] = self.formatException(record.exc_info)
+        return json.dumps(payload, ensure_ascii=True)
 
 def setup_logging(name="bot_fazendeiro", log_file="bot.log", level=logging.INFO):
     """
@@ -19,8 +39,8 @@ def setup_logging(name="bot_fazendeiro", log_file="bot.log", level=logging.INFO)
     if logger.hasHandlers():
         return logger
 
-    # Formatter
-    formatter = logging.Formatter(
+    use_json = os.getenv("LOG_JSON", "0") == "1"
+    formatter = JsonFormatter() if use_json else logging.Formatter(
         '[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )

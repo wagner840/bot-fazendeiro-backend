@@ -8,7 +8,7 @@ import asyncio
 import discord
 from discord.ext import commands
 
-from config import DISCORD_TOKEN, supabase, init_supabase
+from config import DISCORD_TOKEN, CHECKOUT_URL, supabase, init_supabase
 from database import get_empresas_by_guild, get_produtos_empresa, verificar_assinatura_servidor
 from utils import selecionar_empresa
 from ui_utils import create_error_embed

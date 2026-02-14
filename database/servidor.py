@@ -23,7 +23,9 @@ async def get_or_create_servidor(guild_id: str, nome: str, proprietario_id: str)
             'guild_id': guild_id,
             'nome': nome,
             'proprietario_discord_id': proprietario_id,
-            'ativo': True
+            'ativo': True,
+            # Force explicit base selection on first setup instead of defaulting silently.
+            'base_redm_id': None,
         }).execute()
 
         if response.data:

@@ -88,18 +88,7 @@ class AdminCog(commands.Cog, name="Administração"):
             await ctx.send(embed=create_info_embed("Já Configurado", f"Empresa já existe: **{empresa['nome']}**\nUse `/novaempresa` para adicionar mais."), ephemeral=True)
             return
 
-        # Check if we need to select base
-        if servidor.get('base_redm_id'):
-            tipos = await get_tipos_empresa(guild_id)
-            if not tipos:
-                await ctx.send(embed=create_error_embed("Erro", "Nenhum tipo de empresa configurado para esta base."))
-                return
-
-            view = NovaEmpresaView(tipos, guild_id, servidor['id'], proprietario_id)
-            embed = create_info_embed("🏢 Configuração de Empresa", "Selecione o tipo da sua empresa.")
-            await ctx.send(embed=embed, view=view)
-            return
-
+        # Always require explicit base selection on first setup (1 base per Discord server).
         bases = await get_bases_redm()
         if not bases:
             await ctx.send("❌ Erro critico: Nenhuma base REDM encontrada no sistema.")
@@ -109,7 +98,8 @@ class AdminCog(commands.Cog, name="Administração"):
         view = BaseSelectView(bases, guild_id, servidor['id'], proprietario_id)
         embed = create_info_embed("🌍 Selecione o Servidor REDM",
                                   "Este bot suporta múltiplas economias.\n"
-                                  "Qual servidor/base vocês jogam?")
+                                  "Escolha a base REDM deste servidor Discord.\n\n"
+                                  "⚠️ Essa escolha vale para este servidor Discord.")
 
         await ctx.send(embed=embed, view=view)
 

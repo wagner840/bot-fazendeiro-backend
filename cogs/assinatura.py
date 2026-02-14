@@ -1,6 +1,6 @@
-"""
+﻿"""
 Bot Multi-Empresa Downtown - Cog de Assinatura
-Gerencia verificação de assinatura e pagamentos.
+Gerencia verificaÃ§Ã£o de assinatura e pagamentos.
 """
 
 import aiohttp
@@ -27,22 +27,22 @@ from config import FRONTEND_URL, CHECKOUT_URL, SUPERADMIN_IDS, ASAAS_API_KEY, AS
 def criar_embed_assinatura_expirada():
     """Cria embed de aviso de assinatura expirada."""
     embed = discord.Embed(
-        title="⚠️ Assinatura Necessária",
-        description="Este servidor não possui uma assinatura ativa do Bot Fazendeiro.\n\n"
-                    "Para continuar usando o bot, é necessário renovar a assinatura.",
+        title="âš ï¸ Assinatura NecessÃ¡ria",
+        description="Este servidor nÃ£o possui uma assinatura ativa do Bot Fazendeiro.\n\n"
+                    "Para continuar usando o bot, Ã© necessÃ¡rio renovar a assinatura.",
         color=discord.Color.red()
     )
     embed.add_field(
-        name="🔗 Link para Pagamento",
+        name="ðŸ”— Link para Pagamento",
         value=f"[Clique aqui para assinar]({CHECKOUT_URL})",
         inline=False
     )
     embed.add_field(
-        name="💳 Pagamento via PIX",
-        value="Pagamentos são confirmados instantaneamente!",
+        name="ðŸ’³ Pagamento via PIX",
+        value="Pagamentos sÃ£o confirmados instantaneamente!",
         inline=False
     )
-    embed.set_footer(text="Bot Fazendeiro | Sistema de Gestão Empresarial")
+    embed.set_footer(text="Bot Fazendeiro | Sistema de GestÃ£o Empresarial")
     return embed
 
 
@@ -60,7 +60,7 @@ def requer_assinatura():
 
 
 def is_superadmin():
-    """Verifica se o usuário é superadmin."""
+    """Verifica se o usuÃ¡rio Ã© superadmin."""
     async def predicate(ctx):
         # Dono do bot ou IDs configurados
         if await ctx.bot.is_owner(ctx.author):
@@ -86,24 +86,24 @@ class Assinatura(commands.Cog):
             is_tester = assinatura.get('status') == 'tester'
             
             embed = discord.Embed(
-                title="✅ Assinatura Ativa" if not is_tester else "🧪 Modo Tester",
+                title="âœ… Assinatura Ativa" if not is_tester else "ðŸ§ª Modo Tester",
                 description=f"Seu servidor possui acesso ao bot!" if not is_tester else "Servidor em modo de teste gratuito!",
                 color=discord.Color.green() if not is_tester else discord.Color.blue()
             )
             embed.add_field(
-                name="📋 Plano",
+                name="ðŸ“‹ Plano",
                 value=assinatura.get('plano_nome', 'N/A'),
                 inline=True
             )
             embed.add_field(
-                name="📅 Dias Restantes",
+                name="ðŸ“… Dias Restantes",
                 value=f"{assinatura.get('dias_restantes', 0)} dias",
                 inline=True
             )
             if assinatura.get('data_expiracao') and not is_tester:
                 expiracao = assinatura['data_expiracao'][:10]
                 embed.add_field(
-                    name="⏰ Expira em",
+                    name="â° Expira em",
                     value=expiracao,
                     inline=True
                 )
@@ -114,44 +114,45 @@ class Assinatura(commands.Cog):
 
     @commands.command(name='assinarpix', aliases=['renovar', 'assinar'])
     async def link_pagamento(self, ctx):
-        """Mostra o link para pagamento/renovação."""
+        """Mostra o link para pagamento/renovaÃ§Ã£o."""
         planos = await get_planos_disponiveis()
 
         embed = discord.Embed(
-            title="💳 Assinar Bot Fazendeiro",
-            description="Escolha um plano e faça o pagamento via PIX para ativar o bot.",
+            title="ðŸ’³ Assinar Bot Fazendeiro",
+            description="Escolha um plano e faÃ§a o pagamento via PIX para ativar o bot.",
             color=discord.Color.gold()
         )
 
         for plano in planos:
             preco_formatado = f"R$ {plano['preco']:.2f}".replace('.', ',')
             embed.add_field(
-                name=f"📦 {plano['nome']}",
+                name=f"ðŸ“¦ {plano['nome']}",
                 value=f"{preco_formatado} - {plano['duracao_dias']} dias",
                 inline=True
             )
 
         embed.add_field(
-            name="🔗 Link de Pagamento",
+            name="ðŸ”— Link de Pagamento",
             value=f"[Clique aqui para assinar]({CHECKOUT_URL})",
             inline=False
         )
 
-        embed.set_footer(text="Pagamentos via PIX são confirmados instantaneamente!")
+        embed.set_footer(text="Pagamentos via PIX sÃ£o confirmados instantaneamente!")
 
         await ctx.send(embed=embed)
 
+
     @commands.command(name='planos')
     async def listar_planos(self, ctx):
-        """Lista todos os planos disponíveis."""
+        """Lista todos os planos disponÃ­veis."""
         planos = await get_planos_disponiveis()
 
         if not planos:
-            await ctx.send("❌ Nenhum plano disponível no momento.")
+            await ctx.send("âŒ Nenhum plano disponÃ­vel no momento.")
             return
 
         embed = discord.Embed(
-            title="📋 Planos Disponíveis",
+            title="ðŸ“‹ Planos DisponÃ­veis",
             description="Escolha o plano ideal para seu servidor!",
             color=discord.Color.blue()
         )
@@ -161,13 +162,13 @@ class Assinatura(commands.Cog):
             descricao = plano.get('descricao', 'Acesso completo ao bot')
             embed.add_field(
                 name=f"**{plano['nome']}** - {preco_formatado}",
-                value=f"⏱️ {plano['duracao_dias']} dias\n📝 {descricao}",
+                value=f"â±ï¸ {plano['duracao_dias']} dias\nðŸ“ {descricao}",
                 inline=False
             )
 
         embed.add_field(
             name="",
-            value=f"[➡️ Assinar Agora]({CHECKOUT_URL})",
+            value=f"[âž¡ï¸ Assinar Agora]({CHECKOUT_URL})",
             inline=False
         )
 
@@ -195,9 +196,9 @@ class Assinatura(commands.Cog):
         )
         
         if success:
-            await ctx.send(f"✅ Servidor **{nome}** adicionado como tester!\nMotivo: {motivo}")
+            await ctx.send(f"âœ… Servidor **{nome}** adicionado como tester!\nMotivo: {motivo}")
         else:
-            await ctx.send("❌ Erro ao adicionar tester.")
+            await ctx.send("âŒ Erro ao adicionar tester.")
 
     @commands.command(name='removetester')
     @is_superadmin()
@@ -208,9 +209,9 @@ class Assinatura(commands.Cog):
         success = await remover_tester(target_guild)
         
         if success:
-            await ctx.send(f"✅ Servidor removido da lista de testers.")
+            await ctx.send(f"âœ… Servidor removido da lista de testers.")
         else:
-            await ctx.send("❌ Erro ao remover tester.")
+            await ctx.send("âŒ Erro ao remover tester.")
 
     @commands.command(name='testers')
     @is_superadmin()
@@ -219,11 +220,11 @@ class Assinatura(commands.Cog):
         testers = await listar_testers()
         
         if not testers:
-            await ctx.send("📋 Nenhum tester cadastrado.")
+            await ctx.send("ðŸ“‹ Nenhum tester cadastrado.")
             return
         
         embed = discord.Embed(
-            title="🧪 Testers Cadastrados",
+            title="ðŸ§ª Testers Cadastrados",
             color=discord.Color.blue()
         )
         
@@ -244,14 +245,14 @@ class Assinatura(commands.Cog):
         """[SUPERADMIN] Simula pagamento PIX para testes."""
         target_guild = guild_id or str(ctx.guild.id)
         
-        await ctx.send("⏳ Simulando pagamento...")
+        await ctx.send("â³ Simulando pagamento...")
         
         success = await simular_pagamento(target_guild)
         
         if success:
-            await ctx.send(f"✅ Pagamento simulado! Assinatura ativada para guild `{target_guild}`.")
+            await ctx.send(f"âœ… Pagamento simulado! Assinatura ativada para guild `{target_guild}`.")
         else:
-            await ctx.send("❌ Erro ao simular pagamento. Certifique-se de que há um pagamento pendente.")
+            await ctx.send("âŒ Erro ao simular pagamento. Certifique-se de que hÃ¡ um pagamento pendente.")
 
     @commands.command(name='validarpagamento', aliases=['verificarpagamento', 'claimpayment'])
     async def validar_pagamento(self, ctx):
@@ -260,13 +261,13 @@ class Assinatura(commands.Cog):
             discord_id = str(ctx.author.id)
             guild_id = str(ctx.guild.id)
             
-            await ctx.send(f"🔍 Buscando transações recentes para <@{discord_id}>...")
+            await ctx.send(f"ðŸ” Buscando transaÃ§Ãµes recentes para <@{discord_id}>...")
             
             # Busca qualquer pagamento recente (pendente ou pago)
             pagamento = await buscar_pagamento_pendente_usuario(discord_id)
             
             if not pagamento:
-                await ctx.send("❌ Nenhum registro de pagamento encontrado.\nCertifique-se de ter gerado o QR Code recentemente.")
+                await ctx.send("âŒ Nenhum registro de pagamento encontrado.\nCertifique-se de ter gerado o QR Code recentemente.")
                 return
                 
             pix_id = pagamento['pix_id']
@@ -274,40 +275,40 @@ class Assinatura(commands.Cog):
             plano_id = pagamento.get('plano_id')
             status_db = pagamento.get('status')
 
-            # Validação de segurança: garante que o pagamento pertence ao usuário
+            # ValidaÃ§Ã£o de seguranÃ§a: garante que o pagamento pertence ao usuÃ¡rio
             if pagamento.get('discord_id') and pagamento['discord_id'] != discord_id:
-                await ctx.send("❌ Este pagamento não pertence a você.")
+                await ctx.send("âŒ Este pagamento nÃ£o pertence a vocÃª.")
                 return
 
-            # 1. Vincular ao servidor atual se necessário
+            # 1. Vincular ao servidor atual se necessÃ¡rio
             if pagamento['guild_id'] != guild_id and pagamento['guild_id'] == 'pending_activation':
-                await ctx.send(f"🔗 Vinculando pagamento de R$ {valor} a este servidor...")
+                await ctx.send(f"ðŸ”— Vinculando pagamento de R$ {valor} a este servidor...")
                 updated = await atualizar_pagamento_guild(pix_id, guild_id)
                 if not updated:
-                    await ctx.send("❌ Erro ao vincular pagamento.")
+                    await ctx.send("âŒ Erro ao vincular pagamento.")
                     return
             elif pagamento['guild_id'] != guild_id:
-                await ctx.send(f"⚠️ Atenção: Este pagamento está vinculado a outro servidor (ID: {pagamento['guild_id']}).\nNão posso transferi-lo automaticamente.")
+                await ctx.send(f"âš ï¸ AtenÃ§Ã£o: Este pagamento estÃ¡ vinculado a outro servidor (ID: {pagamento['guild_id']}).\nNÃ£o posso transferi-lo automaticamente.")
                 return
 
-            # 2. Verificação Real no Asaas
-            # Se status já é 'pago' no banco, confiamos no banco (Webhook funcionou) e apenas ativamos a assinatura
+            # 2. VerificaÃ§Ã£o Real no Asaas
+            # Se status jÃ¡ Ã© 'pago' no banco, confiamos no banco (Webhook funcionou) e apenas ativamos a assinatura
             if status_db == 'pago':
-                await ctx.send("✅ Pagamento já consta como confirmado no sistema. Ativando assinatura...")
+                await ctx.send("âœ… Pagamento jÃ¡ consta como confirmado no sistema. Ativando assinatura...")
                 success = await ativar_assinatura_servidor(guild_id, plano_id, discord_id)
                 if success:
-                    await ctx.send(f"🎉 **Sucesso!** Assinatura ativa para **{ctx.guild.name}**.")
+                    await ctx.send(f"ðŸŽ‰ **Sucesso!** Assinatura ativa para **{ctx.guild.name}**.")
                 else:
-                    await ctx.send("❌ Erro ao ativar assinatura (Erro Interno).")
+                    await ctx.send("âŒ Erro ao ativar assinatura (Erro Interno).")
                 return
 
             # Se 'pendente', consultamos a API do Asaas
-            await ctx.send("🌐 Consultando Banco Central/Asaas para confirmação...")
+            await ctx.send("ðŸŒ Consultando Banco Central/Asaas para confirmaÃ§Ã£o...")
             
             headers = {"access_token": ASAAS_API_KEY}
             
             if not ASAAS_API_KEY:
-                await ctx.send("❌ API Key não configurada. Não é possível validar pagamento.")
+                await ctx.send("âŒ API Key nÃ£o configurada. NÃ£o Ã© possÃ­vel validar pagamento.")
                 return
             else:
                 try:
@@ -317,38 +318,37 @@ class Assinatura(commands.Cog):
                                 data = await resp.json()
                                 status_real = data.get('status')
                             else:
-                                await ctx.send(f"❌ Erro de comunicação com o gateway de pagamento (Status {resp.status}).")
+                                await ctx.send(f"âŒ Erro de comunicaÃ§Ã£o com o gateway de pagamento (Status {resp.status}).")
                                 return
                 except Exception as e:
-                    await ctx.send(f"❌ Erro de conexão: {e}")
+                    await ctx.send(f"âŒ Erro de conexÃ£o: {e}")
                     return
 
             # 3. Processa Resultado
             if status_real in ['RECEIVED', 'CONFIRMED']:
-                await ctx.send("💸 Pagamento confirmado! Finalizando configuração...")
+                await ctx.send("ðŸ’¸ Pagamento confirmado! Finalizando configuraÃ§Ã£o...")
                 
                 await supabase.table('pagamentos_pix').update({'status': 'pago'}).eq('pix_id', pix_id).execute()
                 
                 success = await ativar_assinatura_servidor(guild_id, plano_id, discord_id)
                 
                 if success:
-                    await ctx.send(f"🎉 **Parabéns!** O servidor **{ctx.guild.name}** está com assinatura ativa!\nUse `!configurar` para iniciar.")
+                    await ctx.send(f"ðŸŽ‰ **ParabÃ©ns!** O servidor **{ctx.guild.name}** estÃ¡ com assinatura ativa!\nUse `!configurar` para iniciar.")
                 else:
-                    await ctx.send("❌ Assinatura não pôde ser ativada no banco de dados.")
+                    await ctx.send("âŒ Assinatura nÃ£o pÃ´de ser ativada no banco de dados.")
             elif status_real == 'PENDING':
-                await ctx.send("⏳ O pagamento ainda está pendente no banco. Tente novamente em alguns segundos.")
+                await ctx.send("â³ O pagamento ainda estÃ¡ pendente no banco. Tente novamente em alguns segundos.")
             else:
-                await ctx.send(f"❌ O status do pagamento é: {status_real}. Não foi possível ativar.")
+                await ctx.send(f"âŒ O status do pagamento Ã©: {status_real}. NÃ£o foi possÃ­vel ativar.")
         except ImportError as ie:
-            await ctx.send(f"❌ Erro de configuração interna (Import): {ie}")
+            await ctx.send(f"âŒ Erro de configuraÃ§Ã£o interna (Import): {ie}")
             from logging_config import logger
             logger.error(f"Erro no comando validarpagamento: {ie}")
         except Exception as e:
-            await ctx.send(f"❌ Ocorreu um erro inesperado: {e}")
+            await ctx.send(f"âŒ Ocorreu um erro inesperado: {e}")
             from logging_config import logger
             logger.error(f"Erro no comando validarpagamento: {e}")
 
 
 async def setup(bot):
     await bot.add_cog(Assinatura(bot))
-

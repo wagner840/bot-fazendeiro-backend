@@ -75,7 +75,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 # ─── Routes ──────────────────────────────────────────────────────────────────
 
-from api.routes.payment import router as payment_router
+from api_pkg.routes.payment import router as payment_router
 app.include_router(payment_router)
 
 

@@ -5,6 +5,7 @@ Versão modularizada com Cogs
 """
 
 import asyncio
+import uuid
 import discord
 from discord.ext import commands
 
@@ -64,7 +65,14 @@ class SetupWizardView(discord.ui.View):
 @bot.event
 async def on_guild_join(guild):
     """Quando bot entra em novo servidor."""
-    canal = guild.system_channel or guild.text_channels[0]
+    me = guild.me or guild.get_member(bot.user.id)
+    canal = guild.system_channel or next(
+        (
+            c for c in guild.text_channels
+            if me and c.permissions_for(me).send_messages
+        ),
+        None
+    )
 
     embed = discord.Embed(
         title="🏢 Bem-vindo ao Bot Fazendeiro!",
@@ -83,7 +91,63 @@ async def on_guild_join(guild):
     embed.set_footer(text="Bot Fazendeiro | Advanced Management Solutions")
 
     view = SetupWizardView()
-    await canal.send(embed=embed, view=view)
+    if canal:
+        await canal.send(embed=embed, view=view)
+
+    request_id = str(uuid.uuid4())
+    guild_id = str(guild.id)
+    owner_id = str(guild.owner_id) if guild.owner_id else None
+
+    if not owner_id:
+        logger.warning(
+            "trial_join_skip request_id=%s guild_id=%s reason=no_owner_id",
+            request_id,
+            guild_id
+        )
+        return
+
+    try:
+        trial_resp = await supabase.rpc(
+            'consumir_trial_intent',
+            {
+                'p_discord_id': owner_id,
+                'p_guild_id': guild_id
+            }
+        ).execute()
+        result = (trial_resp.data or [{}])[0]
+        status = result.get('resultado', 'unknown')
+        message = result.get('mensagem', 'Sem detalhes adicionais.')
+
+        logger.info(
+            "trial_join_result request_id=%s guild_id=%s owner_id=%s resultado=%s mensagem=%s",
+            request_id,
+            guild_id,
+            owner_id,
+            status,
+            message
+        )
+
+        if not canal:
+            return
+
+        if status == 'success':
+            await canal.send(
+                "✅ **Trial de 3 dias ativado com sucesso!**\n"
+                "Agora o servidor já pode usar `/configurar` para iniciar a empresa."
+            )
+        elif status in {'already_used_user', 'already_used', 'has_active'}:
+            await canal.send(
+                f"ℹ️ {message}\n"
+                f"Para ativar assinatura: {CHECKOUT_URL}"
+            )
+    except Exception as e:
+        logger.error(
+            "trial_join_error request_id=%s guild_id=%s owner_id=%s erro=%s",
+            request_id,
+            guild_id,
+            owner_id,
+            e
+        )
 
 
 # ============================================
